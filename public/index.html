@@ -19,6 +19,14 @@
         <input id="account-search" type="search" placeholder="Filter accounts / ad sets">
       </div>
       <p class="hint">Pick the ad sets the ads go into. Each account needs a Facebook Page (and an Instagram account if you want IG placements).</p>
+      <div class="toolbar">
+        <div id="view-tabs" class="tabs" role="tablist" aria-label="View by">
+          <button type="button" data-view="account">By ad account</button>
+          <button type="button" data-view="campaign">By campaign</button>
+          <button type="button" data-view="adset">By ad set</button>
+        </div>
+        <button type="button" id="sort-dir" title="Sort direction">A → Z</button>
+      </div>
       <div id="accounts"><p class="muted">Loading ad accounts…</p></div>
     </section>
 
@@ -47,8 +55,19 @@
       <button id="publish" type="button" class="primary">Publish</button>
       <div id="errors" class="errors" hidden></div>
       <div id="results" hidden>
+        <div class="toolbar">
+          <label class="inline">Group results by
+            <select id="group-by">
+              <option value="account">Ad account</option>
+              <option value="campaign">Campaign</option>
+              <option value="adset">Ad set</option>
+              <option value="ad">Ad</option>
+            </select>
+          </label>
+          <span id="result-counts" class="muted"></span>
+        </div>
         <table>
-          <thead><tr><th>Ad</th><th>Ad set</th><th>Result</th></tr></thead>
+          <thead><tr><th>Ad</th><th>Ad account / Campaign / Ad set</th><th>Result</th></tr></thead>
           <tbody></tbody>
         </table>
         <details><summary>Log</summary><pre id="log"></pre></details>
@@ -80,14 +99,16 @@
           <label>Description <input data-f="description" maxlength="255" placeholder="Small text under the headline (optional)"></label>
           <div class="two">
             <label>Call to action <select data-f="cta"></select></label>
-            <label>Destination URL <input data-f="link" type="url" placeholder="https://"></label>
+            <label>Website (destination link) <input data-f="link" type="url" list="websites" placeholder="https://yoursite.com/landing-page"></label>
           </div>
+          <label>Display link <input data-f="displayLink" placeholder="yoursite.com (optional, the website text shown on the ad)"></label>
           <label>URL parameters <input data-f="urlTags" placeholder="utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}"></label>
         </div>
       </div>
     </div>
   </template>
 
+  <datalist id="websites"></datalist>
   <script src="app.js"></script>
 </body>
 </html>

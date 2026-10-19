@@ -10,7 +10,9 @@ For each ad you set:
 - Headline
 - Description
 - Call-to-action button
-- Destination URL (+ optional URL parameters for UTM tracking)
+- Website (destination link). Websites you've used before are suggested as you type
+- Display link (optional, the website text shown on the ad)
+- URL parameters (optional, for UTM tracking)
 
 Every ad is published into every ad set you tick, across as many ad accounts as you want.
 
@@ -31,14 +33,21 @@ npm start               # http://127.0.0.1:3000
 
 ## How it works
 
-1. **Where to publish**: lists every active ad account the token can see. Expand an
-   account to tick ad sets, and pick the Facebook Page (and linked Instagram)
-   for that account. Campaigns and ad sets (budget, audience, placements) are set up
+1. **Where to publish**: lists every active ad account the token can see, in one of
+   three views:
+   - **By ad account**: account → campaign → ad set, with select-all at each level.
+   - **By campaign**: every campaign across all accounts, expand to tick ad sets.
+   - **By ad set**: one table of every ad set. Click a column (Ad set, Campaign,
+     Ad account, Status) to sort.
+
+   Use the filter box and the A → Z / Z → A button to narrow and order the list.
+   Pick the Facebook Page (and linked Instagram) per account in the account or campaign view. Campaigns and ad sets (budget, audience, placements) are set up
    in Ads Manager. This tool only creates the ads.
 2. **Ads**: add as many ad variations as you want. Text you type is saved
    in your browser between sessions. Media files are not saved.
 3. **Publish**: ads are created **paused** by default. Tick *Dry run* to see the
-   exact payload without creating anything.
+   exact payload without creating anything. Results can be grouped by ad account,
+   campaign, ad set or ad.
 
 For each target account it uploads the media once, creates the creative, then creates the ad.
 

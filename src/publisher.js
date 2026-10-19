@@ -15,8 +15,8 @@ function validateDraft(d, i) {
   const errs = [];
   if (!d.primaryText) errs.push('primary text is required');
   if (!d.headline) errs.push('headline is required');
-  if (!d.link) errs.push('destination URL is required');
-  else if (!/^https?:\/\//i.test(d.link)) errs.push('destination URL must start with http(s)://');
+  if (!d.link) errs.push('website (destination link) is required');
+  else if (!/^https?:\/\//i.test(d.link)) errs.push('website (destination link) must start with http(s)://');
   if (!CTA_TYPES.includes(d.cta)) errs.push(`unknown call to action "${d.cta}"`);
   if (!d.media) errs.push('an image or video is required');
   return errs.map((e) => `${label}: ${e}`);
@@ -28,6 +28,7 @@ function buildObjectStorySpec(draft, target, media) {
   const cta = draft.cta === 'NO_BUTTON'
     ? { type: 'NO_BUTTON' }
     : { type: draft.cta, value: { link: draft.link } };
+  if (media.kind === 'video' && draft.displayLink && cta.value) cta.value.link_caption = draft.displayLink;
 
   if (media.kind === 'video') {
     spec.video_data = {
@@ -44,6 +45,7 @@ function buildObjectStorySpec(draft, target, media) {
       message: draft.primaryText,
       name: draft.headline,
       description: draft.description || undefined,
+      caption: draft.displayLink || undefined,
       image_hash: media.imageHash,
       call_to_action: cta,
     };
@@ -138,8 +140,8 @@ async function uploadVideo(client, accountId, file, { pollMs = 5000, timeoutMs =
 
 /**
  * Publishes every draft into every target ad set.
- * drafts:  [{ name, primaryText, headline, description, cta, link, urlTags, media: multerFile }]
- * targets: [{ accountId, adsetId, adsetName, pageId, instagramUserId }]
+ * drafts:  [{ name, primaryText, headline, description, cta, link, displayLink, urlTags, media: multerFile }]
+ * targets: [{ accountId, accountName, campaignName, adsetId, adsetName, pageId, instagramUserId }]
  * emit(event) receives progress events: { type: 'log'|'result'|'done', ... }
  */
 async function publish(client, { drafts, targets, status = 'PAUSED', dryRun = false }, emit, opts = {}) {
@@ -150,7 +152,14 @@ async function publish(client, { drafts, targets, status = 'PAUSED', dryRun = fa
       const draft = drafts[i];
       const where = `${target.adsetName || target.adsetId} (${actId(target.accountId)})`;
       const log = (message) => emit({ type: 'log', message: `[${draft.name || draft.headline} → ${where}] ${message}` });
-      const result = { draft: i, accountId: target.accountId, adsetId: target.adsetId, adsetName: target.adsetName };
+      const result = {
+        draft: i,
+        accountId: target.accountId,
+        accountName: target.accountName,
+        campaignName: target.campaignName,
+        adsetId: target.adsetId,
+        adsetName: target.adsetName,
+      };
       try {
         const isVideo = draft.media.mimetype.startsWith('video/');
         if (dryRun) {

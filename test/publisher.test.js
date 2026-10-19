@@ -89,3 +89,23 @@ test('validation catches missing fields', () => {
   assert.ok(errs.some((e) => /call to action/.test(e)));
   assert.ok(errs.some((e) => /image or video/.test(e)));
 });
+
+test('display link maps to caption (image) and link_caption (video)', () => {
+  const d = { ...draft, displayLink: 'mysite.com' };
+  assert.equal(buildCreativeParams(d, target, { kind: 'image', imageHash: 'h' }).object_story_spec.link_data.caption, 'mysite.com');
+  const vd = buildCreativeParams(d, target, { kind: 'video', videoId: 'v', thumbnailUrl: 't' }).object_story_spec.video_data;
+  assert.equal(vd.call_to_action.value.link_caption, 'mysite.com');
+});
+
+test('results carry account and campaign names for grouping', async () => {
+  const client = {
+    async post(path) {
+      if (path.endsWith('/adimages')) return { images: { bytes: { hash: 'h' } } };
+      return { id: 'x' };
+    },
+    async get() { return {}; },
+  };
+  const [r] = await publish(client, { drafts: [draft], targets: [{ ...target, accountName: 'Roofing Co', campaignName: 'Leads' }] }, () => {});
+  assert.equal(r.accountName, 'Roofing Co');
+  assert.equal(r.campaignName, 'Leads');
+});
