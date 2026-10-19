@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bulk Ad Publisher</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Bulk Ad Publisher</h1>
+    <div id="token-status" class="pill">Checking…</div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>1. Where to publish</h2>
+        <input id="account-search" type="search" placeholder="Filter accounts / ad sets">
+      </div>
+      <p class="hint">Pick the ad sets the ads go into. Each account needs a Facebook Page (and an Instagram account if you want IG placements).</p>
+      <div id="accounts"><p class="muted">Loading ad accounts…</p></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>2. Ads</h2>
+        <button id="add-draft" type="button">+ Add ad</button>
+      </div>
+      <p class="hint">Every ad below goes into every ad set you selected.</p>
+      <div id="drafts"></div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Publish</h2>
+      <div class="publish-row">
+        <label><input type="radio" name="status" value="PAUSED" checked> Create paused</label>
+        <label><input type="radio" name="status" value="ACTIVE"> Go live now</label>
+        <label class="dry"><input type="checkbox" id="dry-run"> Dry run (show what would be sent, create nothing)</label>
+      </div>
+      <details class="enh">
+        <summary>All Facebook enhancements off — <span id="enh-count"></span> Advantage+ creative features opted out on every ad</summary>
+        <p class="hint">Also opted out of multi-advertiser ads. After each ad is created, the creative is read back from Meta and anything still switched on is flagged in the results.</p>
+        <ul id="enh-list"></ul>
+      </details>
+      <p id="summary" class="summary"></p>
+      <button id="publish" type="button" class="primary">Publish</button>
+      <div id="errors" class="errors" hidden></div>
+      <div id="results" hidden>
+        <table>
+          <thead><tr><th>Ad</th><th>Ad set</th><th>Result</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <details><summary>Log</summary><pre id="log"></pre></details>
+      </div>
+    </section>
+  </main>
+
+  <template id="draft-tpl">
+    <div class="draft">
+      <div class="draft-head">
+        <strong class="draft-num"></strong>
+        <div>
+          <button type="button" class="dup">Duplicate</button>
+          <button type="button" class="remove">Remove</button>
+        </div>
+      </div>
+      <div class="draft-body">
+        <div class="media">
+          <label class="drop">
+            <input type="file" accept="image/*,video/*" data-f="media">
+            <span>Choose image or video</span>
+          </label>
+          <div class="preview"></div>
+        </div>
+        <div class="fields">
+          <label>Ad name <input data-f="name" placeholder="Defaults to the headline"></label>
+          <label>Primary text <textarea data-f="primaryText" rows="5" maxlength="2200" placeholder="The main copy above the image/video"></textarea></label>
+          <label>Headline <input data-f="headline" maxlength="255" placeholder="Bold text under the media"></label>
+          <label>Description <input data-f="description" maxlength="255" placeholder="Small text under the headline (optional)"></label>
+          <div class="two">
+            <label>Call to action <select data-f="cta"></select></label>
+            <label>Destination URL <input data-f="link" type="url" placeholder="https://"></label>
+          </div>
+          <label>URL parameters <input data-f="urlTags" placeholder="utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}"></label>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
