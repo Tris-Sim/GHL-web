@@ -65,6 +65,16 @@
         <h3>Post as</h3>
         <p class="sub">The Facebook Page (and Instagram account) each ad account publishes from.</p>
         <div id="pages-list" class="rows"></div>
+        <div id="pages-help" class="help" hidden>
+          <strong>No Pages showing?</strong> Your token needs access to the Page:
+          <ol>
+            <li>Business Settings → <b>Accounts → Pages</b>: the Page must be in your business (add it, or ask the client to share it as a partner).</li>
+            <li>Business Settings → <b>Users → System users</b> → your system user → <b>Assign assets</b> → Pages → tick the Page → turn on <b>Create ads</b> (or full control).</li>
+            <li>The token needs <code>pages_show_list</code>, <code>pages_read_engagement</code> and <code>pages_manage_ads</code>. If it was made without them, generate a new token with them ticked and update <code>.env</code>.</li>
+            <li>Reload this page.</li>
+          </ol>
+          For Instagram: link the Instagram account to the Page (Page settings → Linked accounts), and assign it to the system user under <b>Accounts → Instagram accounts</b>.
+        </div>
       </div>
     </section>
 

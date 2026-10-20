@@ -133,6 +133,19 @@ app.get('/api/accounts/:id/performance', wrap(async (req, res) => {
   res.json({ accountId: id, accountName: account.name, currency: account.currency, level, rows, total });
 }));
 
+// Pages this ad account is allowed to advertise for. Often finds Pages that
+// /me/accounts doesn't list (e.g. client Pages shared to the business).
+app.get('/api/accounts/:id/pages', wrap(async (req, res) => {
+  const c = client();
+  const path = `${actId(req.params.id)}/promote_pages`;
+  try {
+    res.json(await c.getAll(path, { fields: 'id,name,picture{url},instagram_business_account{id,username}' }));
+  } catch {
+    // Reading the linked Instagram account needs extra Page access; fall back to the basics.
+    res.json(await c.getAll(path, { fields: 'id,name,picture{url}' }));
+  }
+}));
+
 app.get('/api/pages', wrap(async (req, res) => {
   const pages = await client().getAll('me/accounts', { fields: 'id,name,picture{url},instagram_business_account{id,username}' });
   res.json(pages);

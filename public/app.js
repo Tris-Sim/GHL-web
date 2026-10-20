@@ -35,10 +35,24 @@ const openGroups = new Set(); // expanded account / campaign ids
 state.view = store.get('view', 'account');
 state.sort = store.get('sort', { key: 'name', dir: 1 });
 
-function pageFor(accountId) {
-  return pageChoices[accountId] || (state.pages[0] && state.pages[0].id) || '';
+// Pages an account can post as: the ones the ad account can promote first,
+// then every other Page the token can see.
+function pagesFor(accountId) {
+  const acc = state.accounts.find((a) => a.id === accountId);
+  const seen = new Set();
+  return [...(acc?.pages || []), ...state.pages].filter((p) => !seen.has(p.id) && seen.add(p.id));
 }
-const pageById = (id) => state.pages.find((p) => p.id === id);
+function pageFor(accountId) {
+  const options = pagesFor(accountId);
+  const saved = pageChoices[accountId];
+  return (options.some((p) => p.id === saved) ? saved : options[0]?.id) || '';
+}
+const pageById = (id) => [...state.accounts.flatMap((a) => a.pages || []), ...state.pages].find((p) => p.id === id);
+async function loadAccountPages(acc) {
+  if (acc.pages !== undefined) return;
+  acc.pages = null;
+  try { acc.pages = await api(`/api/accounts/${acc.id}/pages`); } catch { acc.pages = []; }
+}
 
 const byText = (a, b) => String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
 const sortRows = (rows, key) => rows.sort((a, b) => state.sort.dir * byText(key(a), key(b)));
@@ -254,12 +268,23 @@ function renderPages() {
     row.className = 'page-row';
     row.innerHTML = `<div><strong>${esc(acc.name)}</strong> <span class="muted">· ${plural([...state.selected.values()].filter((t) => t.accountId === acc.id).length, 'ad set')}</span></div>`;
     const select = document.createElement('select');
-    select.innerHTML = (state.pages.length ? '' : '<option value="">No Pages available for this token</option>')
-      + state.pages.map((p) => `<option value="${p.id}" ${p.id === pageFor(acc.id) ? 'selected' : ''}>${esc(p.name)}${p.instagram_business_account ? `  ·  IG @${esc(p.instagram_business_account.username)}` : '  ·  no Instagram'}</option>`).join('');
+    if (acc.pages === undefined) loadAccountPages(acc).then(() => { renderPages(); updateBar(); });
+    const options = pagesFor(acc.id);
+    const own = new Set((acc.pages || []).map((p) => p.id));
+    const label = (p) => `${esc(p.name)}${p.instagram_business_account ? `  ·  IG @${esc(p.instagram_business_account.username)}` : '  ·  no Instagram'}`;
+    const opt = (p) => `<option value="${p.id}" ${p.id === pageFor(acc.id) ? 'selected' : ''}>${label(p)}</option>`;
+    const mine = options.filter((p) => own.has(p.id));
+    const rest = options.filter((p) => !own.has(p.id));
+    select.innerHTML = acc.pages === null && !options.length ? '<option value="">Loading Pages…</option>'
+      : !options.length ? '<option value="">No Pages found. See the help below</option>'
+        : mine.length && rest.length ? `<optgroup label="Pages this ad account can use">${mine.map(opt).join('')}</optgroup><optgroup label="Other Pages">${rest.map(opt).join('')}</optgroup>`
+          : options.map(opt).join('');
     select.addEventListener('change', () => { pageChoices[acc.id] = select.value; store.set('pageChoices', pageChoices); updateBar(); });
     row.appendChild(select);
     list.appendChild(row);
   }
+  const missing = accs.some((a) => a.pages !== null && !pagesFor(a.id).length);
+  $('#pages-help').hidden = !missing;
 }
 
 async function renderTargets() {

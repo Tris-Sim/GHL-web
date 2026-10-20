@@ -114,6 +114,12 @@ th.sortable:hover { color: var(--text); }
 .page-row { display: grid; grid-template-columns: 1fr minmax(220px, 340px); gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
 .page-row strong { font-weight: 600; }
 
+/* Pages help */
+.help { margin-top: 14px; padding: 14px 16px; border-radius: 10px; background: var(--warn-soft); color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.help strong { color: var(--warn); }
+.help ol { margin: 6px 0 8px; padding-left: 20px; }
+.help code { font-size: 12px; background: rgba(0, 0, 0, .05); padding: 1px 5px; border-radius: 4px; }
+
 /* ---------- Step 2: drafts ---------- */
 #drafts { display: grid; gap: 10px; }
 .draft { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
