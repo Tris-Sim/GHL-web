@@ -51,6 +51,7 @@
               <input id="account-search" type="search" placeholder="Search">
             </div>
             <button type="button" id="sort-dir" class="ghost small" title="Sort direction">A → Z</button>
+            <button type="button" id="new-adset" class="dark small">+ New ad set</button>
           </div>
         </div>
         <div id="accounts" class="list"><p class="empty">Loading ad accounts…</p></div>
@@ -233,6 +234,93 @@
       </div>
     </div>
   </template>
+
+  <dialog id="adset-dialog" class="modal">
+    <form id="adset-form" novalidate>
+      <div class="modal-head">
+        <h3>New ad set</h3>
+        <button type="button" class="icon" data-close title="Close">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.05 4 4.95 4.95L14.95 4 16 5.05 11.05 10 16 14.95 14.95 16 10 11.05 5.05 16 4 14.95 8.95 10 4 5.05 5.05 4Z"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="row-2 eq">
+          <label class="field"><span class="field-label">Ad account</span><select id="as-account"></select></label>
+          <label class="field"><span class="field-label">Campaign</span><select id="as-campaign"></select></label>
+        </div>
+        <p class="sub tight" id="as-campaign-note"></p>
+
+        <div class="seg full" id="as-mode">
+          <button type="button" data-mode="copy">Copy an existing ad set</button>
+          <button type="button" data-mode="new">Start from scratch</button>
+        </div>
+
+        <label class="field"><span class="field-label">Ad set name</span><input id="as-name" placeholder="e.g. Columbus · 30–65 · Homeowners"></label>
+
+        <div id="as-copy" class="group">
+          <label class="field"><span class="field-label">Copy settings from</span><select id="as-source"></select></label>
+          <p class="sub tight">Copies the audience, locations, placements, optimization, pixel and schedule. <strong>The ads inside it are not copied</strong>, so it starts empty, ready for the ads you publish here.</p>
+        </div>
+
+        <div class="field" id="as-budget-wrap">
+          <span class="field-label">Daily budget <span class="opt" id="as-budget-opt"></span></span>
+          <div class="money"><span id="as-cur">$</span><input id="as-budget" type="number" min="1" step="1" inputmode="decimal" placeholder="20"></div>
+        </div>
+        <p class="sub tight" id="as-budget-note" hidden></p>
+
+        <div id="as-new" class="group">
+          <div class="row-2 eq" id="as-conv">
+            <label class="field"><span class="field-label">Pixel</span><select id="as-pixel"></select></label>
+            <label class="field"><span class="field-label">Conversion event</span><select id="as-event"></select></label>
+          </div>
+          <div class="field">
+            <span class="field-label">Locations <span class="opt">City, ZIP, state or country</span></span>
+            <div class="geo">
+              <input id="as-geo" placeholder="Search e.g. Columbus, 43215, Ohio" autocomplete="off">
+              <ul id="as-geo-results" class="geo-results" hidden></ul>
+            </div>
+            <div id="as-locations" class="chips"></div>
+          </div>
+          <div class="row-3" id="as-demo">
+            <label class="field"><span class="field-label">Age from</span><select id="as-age-min"></select></label>
+            <label class="field"><span class="field-label">Age to</span><select id="as-age-max"></select></label>
+            <label class="field"><span class="field-label">Gender</span>
+              <select id="as-gender"><option value="all">All</option><option value="male">Men</option><option value="female">Women</option></select>
+            </label>
+          </div>
+          <p class="sub tight" id="as-special" hidden>This campaign is in a special ad category (housing, jobs, credit), so age and gender can't be targeted and city radius is at least 15 miles.</p>
+          <label class="field"><span class="field-label">Placements</span>
+            <select id="as-placements">
+              <option value="manual">Manual: Facebook &amp; Instagram feeds, Stories, Reels</option>
+              <option value="automatic">Advantage+ placements (Meta chooses)</option>
+            </select>
+          </label>
+          <label class="switch-row flat">
+            <span>
+              <span class="setting-label">Advantage+ audience</span>
+              <span class="sub tight">Off keeps delivery inside the age, gender and locations above.</span>
+            </span>
+            <input type="checkbox" id="as-advantage" class="switch">
+          </label>
+        </div>
+
+        <div class="setting">
+          <span class="setting-label">Status</span>
+          <div class="seg" id="as-status">
+            <button type="button" data-status="PAUSED" class="active">Paused</button>
+            <button type="button" data-status="ACTIVE">Active</button>
+          </div>
+        </div>
+        <div class="alert" id="as-error" hidden></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="ghost" data-close>Cancel</button>
+        <button type="submit" class="primary" id="as-submit">Create ad set</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
 
   <datalist id="websites"></datalist>
   <script src="app.js"></script>

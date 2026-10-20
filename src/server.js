@@ -8,6 +8,7 @@ const multer = require('multer');
 const { createClient, API_VERSION } = require('./meta');
 const { CTA_TYPES, validateDraft, publish } = require('./publisher');
 const { CREATIVE_FEATURES } = require('./enhancements');
+const { GOALS, CONVERSION_EVENTS, validateNewAdset, createAdset, copyAdset } = require('./adsets');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -31,6 +32,8 @@ if (PASSWORD) {
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const client = () => createClient(process.env.META_ACCESS_TOKEN);
+const actId = (id) => (String(id).startsWith('act_') ? String(id) : `act_${id}`);
+const LIVE_STATUSES = ['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED', 'IN_PROCESS', 'WITH_ISSUES'];
 const wrap = (fn) => (req, res) => fn(req, res).catch((err) => res.status(err.status || 500).json({ error: err.message }));
 
 app.get('/api/config', (req, res) => {
@@ -39,6 +42,8 @@ app.get('/api/config', (req, res) => {
     tokenConfigured: Boolean(process.env.META_ACCESS_TOKEN),
     tokenProblem: envProblem,
     ctaTypes: CTA_TYPES,
+    adsetGoals: Object.fromEntries(Object.entries(GOALS).map(([k, g]) => [k, { pixel: Boolean(g.pixel), event: g.event || null }])),
+    conversionEvents: CONVERSION_EVENTS,
     optOutFeatures: CREATIVE_FEATURES,
   });
 });
@@ -55,6 +60,53 @@ app.get('/api/accounts/:id/adsets', wrap(async (req, res) => {
     filtering: [{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED', 'IN_PROCESS', 'WITH_ISSUES'] }],
   });
   res.json(adsets);
+}));
+
+app.get('/api/accounts/:id/campaigns', wrap(async (req, res) => {
+  const campaigns = await client().getAll(`${actId(req.params.id)}/campaigns`, {
+    fields: 'id,name,objective,effective_status,daily_budget,lifetime_budget,special_ad_categories',
+    filtering: [{ field: 'effective_status', operator: 'IN', value: LIVE_STATUSES }],
+  });
+  res.json(campaigns);
+}));
+
+app.get('/api/accounts/:id/pixels', wrap(async (req, res) => {
+  res.json(await client().getAll(`${actId(req.params.id)}/adspixels`, { fields: 'id,name' }));
+}));
+
+// Location search for targeting (cities, ZIPs, regions, countries).
+app.get('/api/geo', wrap(async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json([]);
+  const r = await client().get('search', {
+    type: 'adgeolocation', q, limit: '10',
+    location_types: ['city', 'zip', 'region', 'country'],
+  });
+  res.json((r.data || []).map((l) => ({
+    key: l.key, type: l.type, name: l.name,
+    label: [l.name, l.type === 'city' || l.type === 'zip' ? l.region : null, l.country_code].filter(Boolean).join(', '),
+  })));
+}));
+
+// Create an ad set: { mode: 'copy', sourceAdsetId, name, dailyBudget, status }
+// or { mode: 'new', campaignId, name, dailyBudget, status, pixelId, event, locations, ageMin, ageMax, gender, placements, advantageAudience }
+app.post('/api/accounts/:id/adsets', express.json(), wrap(async (req, res) => {
+  const c = client();
+  const accountId = actId(req.params.id);
+  const input = req.body || {};
+  const { currency } = await c.get(accountId, { fields: 'currency' });
+  const campaign = await c.get(input.campaignId, { fields: 'id,objective,daily_budget,lifetime_budget,special_ad_categories' });
+  let id;
+  if (input.mode === 'copy') {
+    if (!input.sourceAdsetId) return res.status(400).json({ error: 'Pick the ad set to copy.' });
+    id = await copyAdset(c, input.sourceAdsetId, input, campaign, currency);
+  } else {
+    const errs = validateNewAdset(input, campaign);
+    if (errs.length) return res.status(400).json({ error: errs.join('\n') });
+    id = await createAdset(c, accountId, input, campaign, currency);
+  }
+  const adset = await c.get(id, { fields: 'id,name,status,effective_status,campaign{id,name,objective}' });
+  res.json(adset);
 }));
 
 app.get('/api/pages', wrap(async (req, res) => {

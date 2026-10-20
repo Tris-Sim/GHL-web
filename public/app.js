@@ -97,7 +97,19 @@ function adsetLine(row, { showCampaign = true, showAccount = false, nested = fal
   label.innerHTML = `<input type="checkbox" ${state.selected.has(s.id) ? 'checked' : ''}>
     <span>${esc(s.name)}${statusBadge(s.effective_status)}${sub.length ? `<span class="camp">${sub.map(esc).join(' · ')}</span>` : ''}</span>`;
   $('input', label).addEventListener('change', (e) => { setSelected(row, e.target.checked); renderTargets(); });
+  label.appendChild(copyButton(row));
   return label;
+}
+
+// "Copy" opens the new ad set dialog with this ad set as the source (settings only, no ads).
+function copyButton({ acc, s }) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'row-copy';
+  b.textContent = 'Copy';
+  b.title = 'Copy this ad set without its ads';
+  b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openAdsetDialog({ accountId: acc.id, campaignId: s.campaign?.id, source: s }); });
+  return b;
 }
 
 function groupBlock({ id, title, meta, rows, body }) {
@@ -145,6 +157,14 @@ function renderByAccount(root, q) {
               h.className = 'camp-head';
               h.appendChild(bulkBox(camp));
               h.insertAdjacentHTML('beforeend', `<strong>${esc(camp[0].s.campaign?.name || 'No campaign')}</strong>`);
+              if (camp[0].s.campaign?.id) {
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'camp-add';
+                add.textContent = '+ Ad set';
+                add.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openAdsetDialog({ accountId: acc.id, campaignId: camp[0].s.campaign.id }); });
+                h.appendChild(add);
+              }
               box.appendChild(h);
               for (const r of sortRows(camp, (x) => x.s.name)) box.appendChild(adsetLine(r, { showCampaign: false, nested: true }));
             }
@@ -164,7 +184,19 @@ function renderByCampaign(root) {
       title: s.campaign?.name || 'No campaign',
       meta: `${esc(acc.name)} · ${plural(rows.length, 'ad set')}`,
       rows,
-      body: { render(box) { sortRows(rows, (r) => r.s.name).forEach((r) => box.appendChild(adsetLine(r, { showCampaign: false }))); } },
+      body: {
+        render(box) {
+          sortRows(rows, (r) => r.s.name).forEach((r) => box.appendChild(adsetLine(r, { showCampaign: false })));
+          if (s.campaign?.id) {
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'camp-add';
+            add.textContent = '+ Add an ad set to this campaign';
+            add.addEventListener('click', () => openAdsetDialog({ accountId: acc.id, campaignId: s.campaign.id }));
+            box.appendChild(add);
+          }
+        },
+      },
     }));
   }
 }
@@ -188,13 +220,15 @@ function renderByAdset(root) {
     th.addEventListener('click', () => { state.sort = { key, dir: state.sort.key === key ? -state.sort.dir : 1 }; store.set('sort', state.sort); renderTargets(); });
     head.appendChild(th);
   }
+  head.appendChild(document.createElement('th'));
   table.createTHead().appendChild(head);
   const tbody = table.createTBody();
   for (const r of rows) {
     const tr = tbody.insertRow();
     const on = state.selected.has(r.s.id);
     tr.className = on ? 'sel' : '';
-    tr.innerHTML = `<td><input type="checkbox" ${on ? 'checked' : ''}></td><td><strong>${esc(r.s.name)}</strong></td><td>${esc(r.s.campaign?.name)}</td><td class="muted">${esc(r.acc.name)}</td><td>${statusBadge(r.s.effective_status)}</td>`;
+    tr.innerHTML = `<td><input type="checkbox" ${on ? 'checked' : ''}></td><td><strong>${esc(r.s.name)}</strong></td><td>${esc(r.s.campaign?.name)}</td><td class="muted">${esc(r.acc.name)}</td><td>${statusBadge(r.s.effective_status)}</td><td class="copy-cell"></td>`;
+    $('.copy-cell', tr).appendChild(copyButton(r));
     const box = $('input', tr);
     box.addEventListener('click', (e) => e.stopPropagation());
     box.addEventListener('change', () => { setSelected(r, box.checked); renderTargets(); });
@@ -242,6 +276,230 @@ async function renderTargets() {
   else if (state.view === 'adset') renderByAdset(root);
   else renderByAccount(root, q);
   if (!root.children.length) root.innerHTML = '<p class="empty">Nothing matches your search.</p>';
+}
+
+// ---------- New ad set ----------
+const nas = { mode: 'copy', status: 'PAUSED', locations: [], geoTimer: null };
+const loadCampaigns = async (acc) => { if (!acc.campaigns) acc.campaigns = await api(`/api/accounts/${acc.id}/campaigns`); return acc.campaigns; };
+const loadPixels = async (acc) => { if (!acc.pixels) acc.pixels = await api(`/api/accounts/${acc.id}/pixels`); return acc.pixels; };
+const currencySymbol = (cur) => { try { return new Intl.NumberFormat('en', { style: 'currency', currency: cur }).formatToParts(0).find((p) => p.type === 'currency').value; } catch { return cur; } };
+const nasAccount = () => state.accounts.find((a) => a.id === $('#as-account').value);
+const nasCampaign = () => (nasAccount()?.campaigns || []).find((c) => c.id === $('#as-campaign').value);
+const isCboCampaign = (c) => Boolean(Number(c?.daily_budget) || Number(c?.lifetime_budget));
+const isSpecial = (c) => (c?.special_ad_categories || []).some((x) => x && x !== 'NONE');
+const prettyObjective = (o) => String(o || '').replace(/^OUTCOME_/, '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (x) => x.toUpperCase());
+
+function nasError(msg) {
+  $('#as-error').textContent = msg || '';
+  $('#as-error').hidden = !msg;
+}
+
+async function openAdsetDialog({ accountId, campaignId, source } = {}) {
+  nasError('');
+  nas.locations = [];
+  if (source) nas.mode = 'copy';
+  $('#adset-dialog h3').textContent = source ? 'Copy ad set' : 'New ad set';
+  $('#as-name').value = source ? `${source.name} copy` : '';
+  $('#as-budget').value = '';
+  $('#as-geo').value = '';
+  renderChips();
+  const accSel = $('#as-account');
+  accSel.innerHTML = sortRows([...state.accounts], (a) => a.name).map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  const preferred = accountId || selectedAccounts()[0]?.id || state.accounts[0]?.id;
+  if (preferred) accSel.value = preferred;
+  $('#adset-dialog').showModal();
+  await nasLoadAccount(campaignId, source?.id);
+}
+
+async function nasLoadAccount(campaignId, sourceId) {
+  const acc = nasAccount();
+  if (!acc) return;
+  const campSel = $('#as-campaign');
+  campSel.innerHTML = '<option>Loading…</option>';
+  try {
+    await Promise.all([loadCampaigns(acc), loadAdsets(acc)]);
+  } catch (e) { nasError(e.message); return; }
+  campSel.innerHTML = acc.campaigns.length
+    ? sortRows([...acc.campaigns], (c) => c.name).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')
+    : '<option value="">No campaigns. Create one in Ads Manager first</option>';
+  // Default: the campaign you've already ticked ad sets in, else one that supports both modes.
+  const picked = [...state.selected.values()].filter((t) => t.accountId === acc.id).map((t) => acc.adsets.find((s) => s.id === t.adsetId)?.campaign?.id);
+  const fallback = acc.campaigns.find((c) => picked.includes(c.id)) || acc.campaigns.find((c) => state.config.adsetGoals[c.objective]);
+  if (campaignId || fallback) campSel.value = campaignId || fallback.id;
+  $('#as-cur').textContent = currencySymbol(acc.currency);
+  nasCampaignChanged();
+  if (sourceId) { $('#as-source').value = sourceId; nasRender(); }
+}
+
+function nasCampaignChanged() {
+  const acc = nasAccount();
+  const camp = nasCampaign();
+  const adsets = acc?.adsets || [];
+  const goal = camp && state.config.adsetGoals[camp.objective];
+  const cbo = isCboCampaign(camp);
+  $('#as-campaign-note').textContent = camp
+    ? `${prettyObjective(camp.objective)} campaign · ${cbo ? 'campaign budget' : 'budget set per ad set'}${isSpecial(camp) ? ' · special ad category' : ''}`
+    : '';
+
+  // Copy list: this campaign's ad sets first, then the rest of the account.
+  const same = adsets.filter((s) => s.campaign?.id === camp?.id);
+  const other = adsets.filter((s) => s.campaign?.id !== camp?.id);
+  const opts = (list) => sortRows([...list], (s) => s.name).map((s) => `<option value="${s.id}">${esc(s.name)}${s.campaign?.id === camp?.id ? '' : ` · ${esc(s.campaign?.name || '')}`}</option>`).join('');
+  $('#as-source').innerHTML = (same.length ? `<optgroup label="In this campaign">${opts(same)}</optgroup>` : '')
+    + (other.length ? `<optgroup label="Other campaigns in this account">${opts(other)}</optgroup>` : '');
+
+  const copyBtn = $('#as-mode [data-mode="copy"]');
+  const newBtn = $('#as-mode [data-mode="new"]');
+  copyBtn.disabled = !adsets.length;
+  newBtn.disabled = !goal;
+  newBtn.title = goal ? '' : `Not available for ${prettyObjective(camp?.objective)} campaigns. Copy an existing ad set.`;
+  if (nas.mode === 'copy' && copyBtn.disabled) nas.mode = 'new';
+  if (nas.mode === 'new' && newBtn.disabled) nas.mode = 'copy';
+  nasRender();
+}
+
+async function nasRender() {
+  const camp = nasCampaign();
+  const goal = camp && state.config.adsetGoals[camp.objective];
+  const cbo = isCboCampaign(camp);
+  const special = isSpecial(camp);
+  $$('#as-mode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === nas.mode));
+  $$('#as-status button').forEach((b) => b.classList.toggle('active', b.dataset.status === nas.status));
+  $('#as-copy').hidden = nas.mode !== 'copy';
+  $('#as-submit').textContent = nas.mode === 'copy' ? 'Copy ad set' : 'Create ad set';
+  $('#as-new').hidden = nas.mode !== 'new';
+  $('#as-budget-wrap').hidden = cbo;
+  $('#as-budget-note').hidden = !cbo;
+  $('#as-budget-note').textContent = 'This campaign uses a campaign budget, so the ad set has no budget of its own.';
+  $('#as-budget-opt').textContent = nas.mode === 'copy' ? 'Leave empty to keep the source budget' : '';
+  $('#as-budget').placeholder = nas.mode === 'copy' ? 'Same as source' : '20';
+  $('#as-demo').hidden = special;
+  $('#as-special').hidden = !special;
+  $('#as-submit').disabled = !camp || (nas.mode === 'copy' && !$('#as-source').value);
+  $('#as-conv').hidden = !(nas.mode === 'new' && goal?.pixel);
+  if (nas.mode === 'new' && goal?.pixel) {
+    $('#as-event').innerHTML = state.config.conversionEvents.map((e) => `<option value="${e}" ${e === goal.event ? 'selected' : ''}>${esc(prettyObjective(e))}</option>`).join('');
+    const acc = nasAccount();
+    const sel = $('#as-pixel');
+    if (!acc.pixels) {
+      sel.innerHTML = '<option>Loading…</option>';
+      try { await loadPixels(acc); } catch (e) { acc.pixels = []; nasError(e.message); }
+    }
+    sel.innerHTML = acc.pixels.length
+      ? acc.pixels.map((p) => `<option value="${p.id}">${esc(p.name)} · ${esc(p.id)}</option>`).join('')
+      : '<option value="">No pixel on this account</option>';
+  }
+}
+
+function renderChips() {
+  const box = $('#as-locations');
+  box.innerHTML = '';
+  nas.locations.forEach((l, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${esc(l.label)}${l.type === 'city' ? `<select title="Radius">${[0, 10, 15, 25, 40, 50].map((r) => `<option value="${r}" ${Number(l.radius) === r ? 'selected' : ''}>${r ? `+${r} mi` : 'City only'}</option>`).join('')}</select>` : ''}<button type="button" title="Remove">×</button>`;
+    $('select', chip)?.addEventListener('change', (e) => { l.radius = Number(e.target.value); });
+    $('button', chip).addEventListener('click', () => { nas.locations.splice(i, 1); renderChips(); });
+    box.appendChild(chip);
+  });
+}
+
+async function geoSearch() {
+  const q = $('#as-geo').value.trim();
+  const list = $('#as-geo-results');
+  if (q.length < 2) { list.hidden = true; return; }
+  try {
+    const results = await api(`/api/geo?q=${encodeURIComponent(q)}`);
+    list.innerHTML = results.length
+      ? results.map((r, i) => `<li data-i="${i}"><span>${esc(r.label)}</span><span class="type">${esc(r.type)}</span></li>`).join('')
+      : '<li class="muted">No matches</li>';
+    $$('li[data-i]', list).forEach((li) => li.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const r = results[Number(li.dataset.i)];
+      if (!nas.locations.some((l) => l.key === r.key)) nas.locations.push({ ...r, radius: r.type === 'city' ? 15 : undefined });
+      renderChips();
+      $('#as-geo').value = '';
+      list.hidden = true;
+    }));
+    list.hidden = false;
+  } catch (e) {
+    list.innerHTML = `<li class="muted">${esc(e.message)}</li>`;
+    list.hidden = false;
+  }
+}
+
+async function submitAdset(e) {
+  e.preventDefault();
+  nasError('');
+  const acc = nasAccount();
+  const camp = nasCampaign();
+  if (!camp) return nasError('Pick a campaign.');
+  const body = {
+    mode: nas.mode,
+    campaignId: camp.id,
+    name: $('#as-name').value,
+    dailyBudget: $('#as-budget').value,
+    status: nas.status,
+  };
+  if (nas.mode === 'copy') body.sourceAdsetId = $('#as-source').value;
+  else {
+    if (!body.name.trim()) return nasError('Give the ad set a name.');
+    if (!nas.locations.length) return nasError('Add at least one location.');
+    Object.assign(body, {
+      pixelId: $('#as-pixel').value,
+      event: $('#as-event').value,
+      locations: nas.locations.map(({ key, type, radius }) => ({ key, type, radius })),
+      ageMin: $('#as-age-min').value,
+      ageMax: $('#as-age-max').value,
+      gender: $('#as-gender').value,
+      placements: $('#as-placements').value,
+      advantageAudience: $('#as-advantage').checked,
+    });
+  }
+  const btn = $('#as-submit');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try {
+    const res = await fetch(`/api/accounts/${acc.id}/adsets`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (Array.isArray(acc.adsets)) acc.adsets.push(data); else await loadAdsets(acc);
+    setSelected({ acc, s: data }, true);
+    openGroups.add(acc.id);
+    $('#adset-dialog').close();
+    toast(`Ad set "${data.name}" ${nas.mode === 'copy' ? 'copied (no ads)' : 'created'}, ${data.status === 'ACTIVE' ? 'active' : 'paused'} and selected`);
+    renderTargets();
+  } catch (err) {
+    nasError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = nas.mode === 'copy' ? 'Copy ad set' : 'Create ad set';
+  }
+}
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, 4000);
+}
+
+function initAdsetDialog() {
+  const ages = Array.from({ length: 48 }, (_, i) => i + 18);
+  $('#as-age-min').innerHTML = ages.map((a) => `<option value="${a}" ${a === 25 ? 'selected' : ''}>${a}</option>`).join('');
+  $('#as-age-max').innerHTML = ages.map((a) => `<option value="${a}" ${a === 65 ? 'selected' : ''}>${a === 65 ? '65+' : a}</option>`).join('');
+  $('#new-adset').addEventListener('click', () => openAdsetDialog());
+  $('#as-account').addEventListener('change', () => nasLoadAccount());
+  $('#as-campaign').addEventListener('change', nasCampaignChanged);
+  $('#as-source').addEventListener('change', nasRender);
+  $$('#as-mode button').forEach((b) => b.addEventListener('click', () => { nas.mode = b.dataset.mode; nasRender(); }));
+  $$('#as-status button').forEach((b) => b.addEventListener('click', () => { nas.status = b.dataset.status; nasRender(); }));
+  $('#as-geo').addEventListener('input', () => { clearTimeout(nas.geoTimer); nas.geoTimer = setTimeout(geoSearch, 250); });
+  $('#as-geo').addEventListener('blur', () => setTimeout(() => { $('#as-geo-results').hidden = true; }, 150));
+  $('#as-geo').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  $$('#adset-dialog [data-close]').forEach((b) => b.addEventListener('click', () => $('#adset-dialog').close()));
+  $('#adset-form').addEventListener('submit', submitAdset);
 }
 
 // ---------- Drafts ----------
@@ -718,4 +976,5 @@ $('#new-batch').addEventListener('click', () => {
   goTo(1);
   renderTargets();
 });
+initAdsetDialog();
 init().catch((e) => { $('#accounts').innerHTML = `<div class="alert">${esc(e.message)}</div>`; });

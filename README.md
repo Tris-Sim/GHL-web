@@ -51,8 +51,21 @@ The dashboard walks through four steps, with Back / Continue in the bar at the b
 1. **Destinations**: tick the ad sets the ads go into. View them by ad account
    (account → campaign → ad set), by campaign, or as one sortable ad set table,
    and use the search box to narrow the list. Under **Post as**, pick the Facebook
-   Page (and linked Instagram) each account publishes from. Campaigns and ad sets
-   (budget, audience, placements) are set up in Ads Manager. This tool only creates the ads.
+   Page (and linked Instagram) each account publishes from.
+
+   **New ad sets**: use **+ New ad set** (or **+ Ad set** on a campaign, or **Copy** on any
+   ad set row). New ad sets are ticked automatically.
+   - *Copy an existing ad set*: copies the settings only (audience, locations, placements,
+     optimization, pixel). **No ads are copied.** You can copy into a different campaign,
+     rename it and change the daily budget.
+   - *Start from scratch*: name, daily budget (skipped for campaign-budget campaigns), pixel and
+     conversion event (leads/sales campaigns), locations (city with radius, ZIP, state or country),
+     age, gender and placements. Advantage+ audience is off by default. Housing/jobs/credit
+     campaigns automatically drop age/gender and use at least a 15 mile radius.
+     Available for leads, sales, traffic and awareness campaigns; for other objectives, copy one.
+   - Ad sets are created paused unless you pick Active.
+
+   Campaigns themselves are still created in Ads Manager.
 2. **Ads**: each ad is a card you open and close. Add media, primary text, headline,
    description, button and website. Ad name, display link and URL parameters are under
    *More options*. Counters warn when copy will be cut off in feed. Text is saved in
