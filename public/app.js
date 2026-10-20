@@ -394,7 +394,7 @@ async function init() {
   if (!state.config.tokenConfigured) {
     pill.textContent = 'No META_ACCESS_TOKEN set';
     pill.className = 'pill bad';
-    $('#accounts').innerHTML = '<p class="errors">Add META_ACCESS_TOKEN to your .env file and restart the server.</p>';
+    $('#accounts').innerHTML = `<p class="errors">${esc(state.config.tokenProblem || 'Add META_ACCESS_TOKEN to your .env file')}\nFix it, then stop the server (Ctrl + C) and run npm start again.</p>`;
     return;
   }
   try {

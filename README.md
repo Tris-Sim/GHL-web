@@ -24,6 +24,19 @@ cp .env.example .env    # paste your META_ACCESS_TOKEN
 npm start               # http://127.0.0.1:3000
 ```
 
+### Creating `.env`
+
+The file must be named exactly `.env` and sit next to `package.json`. It holds one line:
+
+```
+META_ACCESS_TOKEN=your-token
+```
+
+- **Mac:** `nano .env`, paste the line, then Ctrl+O, Enter, Ctrl+X. Don't use TextEdit, which saves rich text.
+- **Windows:** `notepad .env` (click Yes to create it), paste the line, then save.
+
+If the dashboard says the token is missing, the server prints why when it starts.
+
 ### Getting a token
 
 1. Business Settings → Users → **System users** → add one (Admin).

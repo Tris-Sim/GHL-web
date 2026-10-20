@@ -1,4 +1,6 @@
-require('dotenv').config();
+const { loadEnv } = require('./env');
+
+const envProblem = loadEnv();
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
@@ -35,6 +37,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     apiVersion: API_VERSION,
     tokenConfigured: Boolean(process.env.META_ACCESS_TOKEN),
+    tokenProblem: envProblem,
     ctaTypes: CTA_TYPES,
     optOutFeatures: CREATIVE_FEATURES,
   });
@@ -90,7 +93,10 @@ app.post('/api/publish', upload.any(), async (req, res) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, HOST, () => console.log(`Ad publisher running at http://${HOST}:${PORT} (Graph API ${API_VERSION})`));
+  app.listen(PORT, HOST, () => {
+    console.log(`Ad publisher running at http://${HOST}:${PORT} (Graph API ${API_VERSION})`);
+    console.log(process.env.META_ACCESS_TOKEN ? 'Meta token loaded.' : `WARNING: ${envProblem}`);
+  });
 }
 
 module.exports = app;
