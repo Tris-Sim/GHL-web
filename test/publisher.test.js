@@ -60,9 +60,13 @@ test('unrelated errors are not retried', async () => {
 test('publish uploads media once per account and creates one ad per ad set', async () => {
   const calls = [];
   const client = {
+    async postForm(path, form) {
+      calls.push(path);
+      assert.ok(form.get('filename') instanceof Blob); // sent as a file, not base64
+      return { images: { 'a.png': { hash: 'h1' } } };
+    },
     async post(path, params) {
       calls.push(path);
-      if (path.endsWith('/adimages')) return { images: { bytes: { hash: 'h1' } } };
       if (path.endsWith('/adcreatives')) return { id: `cr${calls.length}` };
       if (path.endsWith('/ads')) { assert.equal(params.status, 'PAUSED'); return { id: `ad${calls.length}` }; }
       throw new Error(`unexpected ${path}`);
@@ -99,13 +103,49 @@ test('display link maps to caption (image) and link_caption (video)', () => {
 
 test('results carry account and campaign names for grouping', async () => {
   const client = {
-    async post(path) {
-      if (path.endsWith('/adimages')) return { images: { bytes: { hash: 'h' } } };
-      return { id: 'x' };
-    },
+    async postForm() { return { images: { 'a.png': { hash: 'h' } } }; },
+    async post() { return { id: 'x' }; },
     async get() { return {}; },
   };
   const [r] = await publish(client, { drafts: [draft], targets: [{ ...target, accountName: 'Roofing Co', campaignName: 'Leads' }] }, () => {});
   assert.equal(r.accountName, 'Roofing Co');
   assert.equal(r.campaignName, 'Leads');
+});
+
+test('videos upload in chunks to the video host', async () => {
+  const { uploadMediaLibrary } = require('../src/publisher');
+  const buf = Buffer.alloc(25);
+  const calls = [];
+  const client = {
+    async post(path, params, opts) {
+      calls.push(['post', params.upload_phase, opts]);
+      if (params.upload_phase === 'start') return { upload_session_id: 'sess', video_id: 'vid9', start_offset: '0', end_offset: '10' };
+      return { success: true };
+    },
+    async postForm(path, form, opts) {
+      const from = Number(form.get('start_offset'));
+      calls.push(['chunk', from, form.get('video_file_chunk').size, opts]);
+      const next = Math.min(from + 10, 25);
+      return { start_offset: String(next), end_offset: String(next === 25 ? 25 : Math.min(next + 10, 25)) };
+    },
+  };
+  const events = [];
+  await uploadMediaLibrary(client, { drafts: [{ media: { mimetype: 'video/mp4', buffer: buf, originalname: 'v.mp4' } }], accountIds: ['1'] }, (e) => events.push(e));
+  const media = events.find((e) => e.type === 'media');
+  assert.equal(media.videoId, 'vid9');
+  assert.deepEqual(calls.filter((c) => c[0] === 'chunk').map((c) => [c[1], c[2]]), [[0, 10], [10, 10], [20, 5]]);
+  assert.ok(calls.every((c) => c.at(-1)?.video === true));
+  assert.equal(calls.at(-1)[1], 'finish');
+});
+
+test('client sends video calls to graph-video and explains 413', async () => {
+  const { createClient } = require('../src/meta');
+  const urls = [];
+  const fetchImpl = async (url) => { urls.push(String(url)); return { ok: urls.length < 3, status: urls.length < 3 ? 200 : 413, json: async () => ({}) }; };
+  const c = createClient('t', { fetchImpl });
+  await c.post('act_1/advideos', { upload_phase: 'start' }, { video: true });
+  await c.post('act_1/adimages', {});
+  assert.match(urls[0], /^https:\/\/graph-video\.facebook\.com\//);
+  assert.match(urls[1], /^https:\/\/graph\.facebook\.com\//);
+  await assert.rejects(c.post('act_1/adimages', {}), /too large \(HTTP 413\)/);
 });

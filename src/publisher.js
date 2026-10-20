@@ -109,18 +109,47 @@ async function verifyOptOuts(client, creativeId) {
     .map(([k, v]) => `${k}=${v.enroll_status}`);
 }
 
+// Sent as a multipart file (not base64 text, which is a third bigger and can hit HTTP 413).
 async function uploadImage(client, accountId, file) {
-  const res = await client.post(`${actId(accountId)}/adimages`, { bytes: file.buffer.toString('base64') });
+  const form = new FormData();
+  form.append('filename', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
+  const res = await client.postForm(`${actId(accountId)}/adimages`, form);
   const img = Object.values(res.images || {})[0];
   if (!img || !img.hash) throw new Error('Image upload returned no hash');
   return { kind: 'image', imageHash: img.hash };
 }
 
+// Resumable upload in chunks to Meta's video host, so any size works.
+async function uploadVideoFile(client, accountId, file, log = () => {}) {
+  const path = `${actId(accountId)}/advideos`;
+  const size = file.buffer.length;
+  const start = await client.post(path, { upload_phase: 'start', file_size: String(size) }, { video: true });
+  const session = start.upload_session_id;
+  let from = Number(start.start_offset);
+  let to = Number(start.end_offset);
+  while (from < to) {
+    const form = new FormData();
+    form.append('upload_phase', 'transfer');
+    form.append('upload_session_id', session);
+    form.append('start_offset', String(from));
+    form.append('video_file_chunk', new Blob([file.buffer.subarray(from, to)]), file.originalname);
+    let next;
+    try {
+      next = await client.postForm(path, form, { video: true });
+    } catch (err) {
+      log(`Chunk upload failed (${err.message}), retrying once…`);
+      next = await client.postForm(path, form, { video: true });
+    }
+    from = Number(next.start_offset);
+    to = Number(next.end_offset);
+    if (size > 0) log(`Uploading video… ${Math.min(100, Math.round((from / size) * 100))}%`);
+  }
+  await client.post(path, { upload_phase: 'finish', upload_session_id: session, title: file.originalname }, { video: true });
+  return start.video_id;
+}
+
 async function uploadVideo(client, accountId, file, { pollMs = 5000, timeoutMs = 10 * 60 * 1000, log = () => {}, wait = true } = {}) {
-  const form = new FormData();
-  form.append('name', file.originalname);
-  form.append('source', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
-  const { id: videoId } = await client.postForm(`${actId(accountId)}/advideos`, form);
+  const videoId = await uploadVideoFile(client, accountId, file, log);
   if (!wait) return { kind: 'video', videoId }; // Ads Manager picks it up once processed
   const started = Date.now();
   for (;;) {
