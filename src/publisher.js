@@ -116,11 +116,12 @@ async function uploadImage(client, accountId, file) {
   return { kind: 'image', imageHash: img.hash };
 }
 
-async function uploadVideo(client, accountId, file, { pollMs = 5000, timeoutMs = 10 * 60 * 1000, log = () => {} } = {}) {
+async function uploadVideo(client, accountId, file, { pollMs = 5000, timeoutMs = 10 * 60 * 1000, log = () => {}, wait = true } = {}) {
   const form = new FormData();
   form.append('name', file.originalname);
   form.append('source', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
   const { id: videoId } = await client.postForm(`${actId(accountId)}/advideos`, form);
+  if (!wait) return { kind: 'video', videoId }; // Ads Manager picks it up once processed
   const started = Date.now();
   for (;;) {
     const v = await client.get(videoId, { fields: 'status' });
@@ -209,7 +210,30 @@ async function publish(client, { drafts, targets, status = 'PAUSED', dryRun = fa
   return results;
 }
 
+// Uploads each draft's media to each account's media library (no Page needed),
+// for building an Ads Manager import file.
+async function uploadMediaLibrary(client, { drafts, accountIds }, emit) {
+  for (const accountId of accountIds) {
+    for (let i = 0; i < drafts.length; i++) {
+      const file = drafts[i].media;
+      const isVideo = file.mimetype.startsWith('video/');
+      try {
+        emit({ type: 'log', message: `[${actId(accountId)}] Uploading ${file.originalname}…` });
+        const media = isVideo
+          ? await uploadVideo(client, accountId, file, { wait: false })
+          : await uploadImage(client, accountId, file);
+        emit({ type: 'media', accountId, draft: i, ok: true, ...media });
+      } catch (err) {
+        emit({ type: 'media', accountId, draft: i, ok: false, error: err.message });
+        emit({ type: 'log', message: `[${actId(accountId)}] FAILED ${file.originalname}: ${err.message}` });
+      }
+    }
+  }
+  emit({ type: 'done' });
+}
+
 module.exports = {
+  uploadMediaLibrary,
   CTA_TYPES,
   validateDraft,
   buildCreativeParams,

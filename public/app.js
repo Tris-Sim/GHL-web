@@ -85,7 +85,7 @@ function groupBy(rows, key) {
 }
 
 function setSelected({ acc, s }, on) {
-  if (on) state.selected.set(s.id, { accountId: acc.id, accountName: acc.name, campaignName: s.campaign?.name || '', adsetId: s.id, adsetName: s.name });
+  if (on) state.selected.set(s.id, { accountId: acc.id, accountName: acc.name, campaignId: s.campaign?.id || '', campaignName: s.campaign?.name || '', adsetId: s.id, adsetName: s.name });
   else state.selected.delete(s.id);
 }
 
@@ -276,7 +276,7 @@ function renderPages() {
     const mine = options.filter((p) => own.has(p.id));
     const rest = options.filter((p) => !own.has(p.id));
     select.innerHTML = acc.pages === null && !options.length ? '<option value="">Loading Pages…</option>'
-      : !options.length ? '<option value="">No Pages found. See the help below</option>'
+      : !options.length ? '<option value="">No Page yet: will be an Ads Manager draft</option>'
         : mine.length && rest.length ? `<optgroup label="Pages this ad account can use">${mine.map(opt).join('')}</optgroup><optgroup label="Other Pages">${rest.map(opt).join('')}</optgroup>`
           : options.map(opt).join('');
     select.addEventListener('change', () => { pageChoices[acc.id] = select.value; store.set('pageChoices', pageChoices); updateBar(); });
@@ -698,7 +698,8 @@ function reviewChecks(d, pages) {
   checks.push(d.urlTags
     ? ['ok', 'Tracking parameters added.']
     : ['warn', 'No URL parameters. Add UTMs under "More options" so you can track which ad drove each lead.']);
-  if (pages.some((p) => !p?.instagram_business_account)) checks.push(['warn', 'At least one Page has no Instagram account connected, so Instagram placements will run from the Page instead.']);
+  if (pages.some((p) => !p)) checks.push(['warn', 'No Page yet for some accounts, so these become Ads Manager drafts. Pick the Page and switch off Advantage+ creative enhancements there before publishing.']);
+  else if (pages.some((p) => !p?.instagram_business_account)) checks.push(['warn', 'At least one Page has no Instagram account connected, so Instagram placements will run from the Page instead.']);
   return checks;
 }
 
@@ -753,14 +754,31 @@ function renderReview() {
   $('#review-targets').innerHTML = [...byAcc.values()].map((rows) => {
     const page = pageById(rows[0].pageId);
     return `<div class="target-group"><strong>${esc(rows[0].accountName)}</strong>
-      <span class="page">as ${esc(page?.name || 'no Page')}${page?.instagram_business_account ? ` · @${esc(page.instagram_business_account.username)}` : ''}</span>
+      <span class="page">${page ? `as ${esc(page.name)}` : 'No Page yet: pick it in Ads Manager'}${page?.instagram_business_account ? ` · @${esc(page.instagram_business_account.username)}` : ''}</span>
       <ul>${rows.map((t) => `<li>${esc(t.adsetName)} <span class="muted">· ${esc(t.campaignName)}</span></li>`).join('')}</ul></div>`;
   }).join('');
   updateStatusNote();
 }
 
+function updateModeUI() {
+  const forced = needsDrafts();
+  const mode = publishMode();
+  $$('#mode-seg button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+    b.disabled = forced && b.dataset.mode === 'api';
+  });
+  $('#mode-note').textContent = mode === 'drafts'
+    ? `${forced ? 'No Page yet for some accounts, so these go out as drafts. ' : ''}Your media is uploaded to each ad account and you get an import file per account. In Ads Manager you import it, pick the Page and publish.`
+    : 'Ads are created in Meta right away, with every Advantage+ creative enhancement switched off.';
+  $('#dry-run-row').hidden = mode === 'drafts';
+  $('.review-side .enh').hidden = mode === 'drafts';
+  $('#enh-drafts').hidden = mode !== 'drafts';
+}
+
 function updateStatusNote() {
-  $$('#status-seg button').forEach((b) => b.classList.toggle('active', b.dataset.status === state.status));
+  updateModeUI();
+  $$('#mode-seg button').forEach((b) => b.addEventListener('click', () => { if (!b.disabled) { state.mode = b.dataset.mode; updateStatusNote(); } }));
+$$('#status-seg button').forEach((b) => b.classList.toggle('active', b.dataset.status === state.status));
   $('#status-note').textContent = state.status === 'ACTIVE'
     ? 'Ads go live as soon as Meta approves them and start spending.'
     : "Ads are created paused. Turn them on in Ads Manager when you're ready.";
@@ -779,7 +797,6 @@ function targets() {
 function blocker(step) {
   if (step === 1) {
     if (!state.selected.size) return 'Select at least one ad set.';
-    if (targets().some((t) => !t.pageId)) return 'Choose a Page for every account under "Post as".';
   }
   if (step === 2) {
     const bad = state.drafts.map((d, i) => [i, missingFields(d)]).filter(([, m]) => m.length);
@@ -787,6 +804,10 @@ function blocker(step) {
   }
   return '';
 }
+
+// Without a Page the API can't create ads, so those go out as Ads Manager drafts.
+const needsDrafts = () => targets().some((t) => !t.pageId);
+const publishMode = () => (needsDrafts() ? 'drafts' : state.mode || 'api');
 
 const reachable = (n) => (n === 4 ? state.published || state.publishing : [1, 2, 3].slice(0, n - 1).every((s) => !blocker(s)));
 
@@ -828,8 +849,13 @@ function updateBar() {
     $('#summary').textContent = `${plural(n, 'ad')} × ${plural(ts.length, 'ad set')}`;
     next.textContent = 'Review';
   } else if (state.step === 3) {
-    $('#summary').textContent = `${plural(total, 'ad')} will be created ${state.status === 'ACTIVE' ? 'and go live' : 'paused'}`;
-    next.textContent = $('#dry-run').checked ? 'Run test' : `Publish ${plural(total, 'ad')}`;
+    if (publishMode() === 'drafts') {
+      $('#summary').textContent = `${plural(total, 'ad')} prepared as Ads Manager drafts`;
+      next.textContent = 'Prepare drafts';
+    } else {
+      $('#summary').textContent = `${plural(total, 'ad')} will be created ${state.status === 'ACTIVE' ? 'and go live' : 'paused'}`;
+      next.textContent = $('#dry-run').checked ? 'Run test' : `Publish ${plural(total, 'ad')}`;
+    }
   } else {
     $('#summary').textContent = '';
   }
@@ -837,7 +863,116 @@ function updateBar() {
 }
 
 // ---------- Publish ----------
+// ---------- Ads Manager drafts (no Page needed) ----------
+// Columns from Meta's Ads Manager import template.
+const IMPORT_COLS = ['Campaign ID', 'Campaign Name', 'Ad Set ID', 'Ad Set Name', 'Ad Name', 'Ad Status', 'Body', 'Title',
+  'Link Description', 'Display Link', 'Link', 'URL Tags', 'Call to Action', 'Image Hash', 'Video ID', 'Link Object ID'];
+const csvCell = (v) => { const t = String(v ?? ''); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+
+function importCsv(accountId) {
+  const rows = targets().filter((t) => t.accountId === accountId).flatMap((t) => state.drafts.map((d, i) => {
+    const media = state.media[`${accountId}|${i}`] || {};
+    return [t.campaignId, t.campaignName, t.adsetId, t.adsetName, d.name || d.headline, state.status, d.primaryText, d.headline,
+      d.description, d.displayLink, d.link, (d.urlTags || '').replace(/^\?/, ''), d.cta, media.imageHash, media.videoId, t.pageId];
+  }));
+  return `\uFEFF${[IMPORT_COLS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}
+
+function downloadImport(acc) {
+  const blob = new Blob([importCsv(acc.id)], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${acc.name.replace(/[^\w\- ]+/g, '').trim() || acc.id} - Ads Manager import.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function renderDraftResults() {
+  const accs = selectedAccounts();
+  const list = $('#results-list');
+  const n = state.drafts.length;
+  list.innerHTML = `<div class="draft-files">${accs.map((acc) => {
+    const ts = targets().filter((t) => t.accountId === acc.id);
+    const media = state.drafts.map((_, i) => state.media[`${acc.id}|${i}`]);
+    const failed = media.filter((m) => m && !m.ok);
+    const pending = media.filter((m) => !m).length;
+    const status = pending ? `Uploading media… ${n - pending}/${n}`
+      : failed.length ? `<span class="bad">${failed.length} upload${failed.length === 1 ? '' : 's'} failed: ${esc(failed[0].error)}</span>`
+        : `${plural(n * ts.length, 'ad')} into ${plural(ts.length, 'ad set')} · media uploaded`;
+    return `<div class="draft-file"><div class="info"><strong>${esc(acc.name)}</strong><span>${status}</span></div>
+      <button type="button" class="${pending ? '' : 'primary'}" data-acc="${acc.id}" ${pending ? 'disabled' : ''}>Download import file</button></div>`;
+  }).join('')}</div>
+  <ol class="steps-list">
+    <li>Open <b>Ads Manager</b> for the ad account, click the <b>Import/Export</b> button above the table, then <b>Import ads in bulk</b> and upload that account's file.</li>
+    <li>The ads land as <b>drafts</b> inside the ad sets you picked. Select them and set the <b>Facebook Page</b> (and Instagram account) under Identity.</li>
+    <li class="warnline">Before publishing, open the creative and switch off every <b>Advantage+ creative enhancement</b>. The import can't do this for you.</li>
+    <li>Click <b>Review and publish</b>. Ads go out ${state.status === 'ACTIVE' ? 'active' : 'paused'}, as set here.</li>
+  </ol>`;
+  $$('button[data-acc]', list).forEach((b) => b.addEventListener('click', () => downloadImport(state.accounts.find((a) => a.id === b.dataset.acc))));
+}
+
+async function doDrafts() {
+  const ts = targets();
+  const accountIds = [...new Set(ts.map((t) => t.accountId))];
+  const form = new FormData();
+  form.append('payload', JSON.stringify({ drafts: state.drafts.map(({ file, url, ...d }) => ({ name: d.name || d.headline })), accountIds }));
+  state.drafts.forEach((d, i) => form.append(`media_${i}`, d.file));
+
+  Object.assign(state, { publishing: true, published: false, results: [], media: {}, total: accountIds.length * state.drafts.length, draftRun: true });
+  rememberWebsites();
+  $('#errors').hidden = true;
+  $('#log').textContent = '';
+  $('#new-batch').hidden = true;
+  $('#group-by').closest('.toolbar').hidden = true;
+  $('#results-title').textContent = 'Preparing Ads Manager drafts…';
+  $('#results-sub').textContent = 'Uploading your media to each ad account. Keep this tab open.';
+  goTo(4);
+  renderDraftResults();
+  try {
+    const res = await fetch('/api/upload-media', { method: 'POST', body: form });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const e = JSON.parse(buf.slice(0, nl));
+        buf = buf.slice(nl + 1);
+        if (e.type === 'log') $('#log').textContent += `${e.message}\n`;
+        if (e.type === 'fatal') { $('#errors').textContent = e.error; $('#errors').hidden = false; }
+        if (e.type === 'media') {
+          state.media[`${e.accountId}|${e.draft}`] = e;
+          $('#progress-bar').style.width = `${Math.round((Object.keys(state.media).length / state.total) * 100)}%`;
+          renderDraftResults();
+        }
+      }
+    }
+  } catch (e) {
+    $('#errors').textContent = e.message;
+    $('#errors').hidden = false;
+  } finally {
+    state.publishing = false;
+    state.published = true;
+    const failed = Object.values(state.media).filter((m) => !m.ok).length;
+    $('#progress-bar').style.width = '100%';
+    $('#results-title').textContent = failed ? 'Drafts prepared with problems' : 'Drafts ready for Ads Manager';
+    $('#results-sub').textContent = 'Download each account\'s import file and follow the steps below. Nothing is live yet.';
+    $('#new-batch').hidden = false;
+    renderDraftResults();
+    updateBar();
+  }
+}
+
 async function doPublish() {
+  if (publishMode() === 'drafts') return doDrafts();
+  state.draftRun = false;
+  $('#group-by').closest('.toolbar').hidden = false;
   const dryRun = $('#dry-run').checked;
   const ts = targets();
   const total = state.drafts.length * ts.length;
@@ -917,6 +1052,7 @@ function resultMessage(r) {
 }
 
 function renderResults() {
+  if (state.draftRun) return renderDraftResults();
   const groupKey = $('#group-by').value;
   const rows = state.results.map((r) => ({ ...r, adName: state.publishedDrafts[r.draft] }));
   const groups = groupBy(rows, RESULT_GROUPS[groupKey]);
@@ -1246,6 +1382,7 @@ $$('#view-tabs button').forEach((b) => b.addEventListener('click', () => {
   renderTargets();
 }));
 $('#sort-dir').addEventListener('click', () => { state.sort.dir = -state.sort.dir; store.set('sort', state.sort); renderTargets(); });
+$$('#mode-seg button').forEach((b) => b.addEventListener('click', () => { if (!b.disabled) { state.mode = b.dataset.mode; updateStatusNote(); } }));
 $$('#status-seg button').forEach((b) => b.addEventListener('click', () => { state.status = b.dataset.status; updateStatusNote(); }));
 $('#dry-run').addEventListener('change', updateBar);
 $$('.stepper li').forEach((li) => $('button', li).addEventListener('click', () => goTo(Number(li.dataset.step))));

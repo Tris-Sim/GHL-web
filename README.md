@@ -78,6 +78,22 @@ The dashboard walks through four steps, with Back / Continue in the bar at the b
 
 For each target account it uploads the media once, creates the creative, then creates the ad.
 
+## No Page yet? Ads Manager drafts
+
+Meta's API can't create an ad without a Facebook Page. If an account has no Page available, the
+Review step switches to **Ads Manager drafts** (you can also pick it yourself):
+
+1. Your images/videos are uploaded to each ad account's media library (no Page needed).
+2. You download one import file per ad account. It holds every ad × ad set with primary text,
+   headline, description, display link, website, URL parameters, button, the uploaded media
+   and the existing campaign / ad set IDs.
+3. In Ads Manager: **Import/Export → Import ads in bulk**, upload the file. The ads arrive as
+   drafts. Set the Facebook Page, **switch off Advantage+ creative enhancements** (the import
+   can't), then **Review and publish**.
+
+Column names follow Meta's import template. If Meta rejects a column, export one ad from
+Ads Manager and compare the headers with `IMPORT_COLS` in `public/app.js`.
+
 ## Performance tab
 
 **Performance** in the header shows your existing ads with the *Tristen performance* columns:

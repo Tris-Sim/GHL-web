@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const { createClient, API_VERSION } = require('./meta');
-const { CTA_TYPES, validateDraft, publish } = require('./publisher');
+const { CTA_TYPES, validateDraft, publish, uploadMediaLibrary } = require('./publisher');
 const { CREATIVE_FEATURES } = require('./enhancements');
 const { GOALS, CONVERSION_EVENTS, validateNewAdset, createAdset, copyAdset } = require('./adsets');
 const { INSIGHT_FIELDS, LEVELS, DATE_PRESETS, buildRows } = require('./insights');
@@ -153,6 +153,26 @@ app.get('/api/pages', wrap(async (req, res) => {
 
 // multipart: field "payload" (JSON) + files "media_<draftIndex>".
 // Streams newline-delimited JSON progress events back to the dashboard.
+// Draft mode (no Page yet): upload media to each account's library and return
+// image hashes / video IDs for the Ads Manager import file. Streams NDJSON.
+app.post('/api/upload-media', upload.any(), async (req, res) => {
+  let payload;
+  try { payload = JSON.parse(req.body.payload || '{}'); } catch { return res.status(400).json({ error: 'payload is not valid JSON' }); }
+  const files = Object.fromEntries((req.files || []).map((f) => [f.fieldname, f]));
+  const drafts = (payload.drafts || []).map((d, i) => ({ ...d, media: files[`media_${i}`] }));
+  const accountIds = [...new Set(payload.accountIds || [])];
+  if (!drafts.length || drafts.some((d) => !d.media)) return res.status(400).json({ error: 'Every ad needs an image or video.' });
+  if (!accountIds.length) return res.status(400).json({ error: 'Select at least one ad set.' });
+  res.setHeader('Content-Type', 'application/x-ndjson');
+  const emit = (e) => res.write(`${JSON.stringify(e)}\n`);
+  try {
+    await uploadMediaLibrary(client(), { drafts, accountIds }, emit);
+  } catch (err) {
+    emit({ type: 'fatal', error: err.message });
+  }
+  res.end();
+});
+
 app.post('/api/publish', upload.any(), async (req, res) => {
   let payload;
   try {

@@ -66,7 +66,8 @@
         <p class="sub">The Facebook Page (and Instagram account) each ad account publishes from.</p>
         <div id="pages-list" class="rows"></div>
         <div id="pages-help" class="help" hidden>
-          <strong>No Pages showing?</strong> Your token needs access to the Page:
+          <strong>No Page yet?</strong> You can still continue: the ads will be prepared as <b>Ads Manager drafts</b> (an import file), and you pick the Page in Ads Manager before publishing.<br>
+          To publish directly from here later, give your token access to the Page:
           <ol>
             <li>Business Settings → <b>Accounts → Pages</b>: the Page must be in your business (add it, or ask the client to share it as a partner).</li>
             <li>Business Settings → <b>Users → System users</b> → your system user → <b>Assign assets</b> → Pages → tick the Page → turn on <b>Create ads</b> (or full control).</li>
@@ -106,6 +107,14 @@
         <aside class="review-side">
           <div class="card">
             <h3>Publish settings</h3>
+            <div class="setting stack">
+              <span class="setting-label">How to publish</span>
+              <div class="seg full" id="mode-seg">
+                <button type="button" data-mode="api" class="active">Publish directly</button>
+                <button type="button" data-mode="drafts">Ads Manager drafts</button>
+              </div>
+            </div>
+            <p class="sub tight" id="mode-note"></p>
             <div class="setting">
               <span class="setting-label">Status</span>
               <div class="seg" id="status-seg">
@@ -114,13 +123,14 @@
               </div>
             </div>
             <p class="sub tight" id="status-note">Ads are created paused. Turn them on in Ads Manager when you're ready.</p>
-            <label class="switch-row">
+            <label class="switch-row" id="dry-run-row">
               <span>
                 <span class="setting-label">Test run</span>
                 <span class="sub tight">Check everything with Meta's data without creating ads.</span>
               </span>
               <input type="checkbox" id="dry-run" class="switch">
             </label>
+            <p class="help tight-help" id="enh-drafts" hidden><strong>Enhancements:</strong> the import can't switch off Advantage+ creative enhancements. Turn them off on each draft in Ads Manager before publishing.</p>
             <details class="enh">
               <summary><span class="check">✓</span> All Facebook enhancements off <span class="muted" id="enh-count"></span></summary>
               <p class="sub tight">Every Advantage+ creative feature and multi-advertiser ads are opted out. Each ad is checked with Meta after it's created.</p>
