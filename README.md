@@ -78,6 +78,28 @@ The dashboard walks through four steps, with Back / Continue in the bar at the b
 
 For each target account it uploads the media once, creates the creative, then creates the ad.
 
+## Performance tab
+
+**Performance** in the header shows your existing ads with the *Tristen performance* columns:
+Delivery, Amount spent, Budget, Actions, CPM, Frequency, Link clicks, Cost per result, Results,
+Cost per 1,000 Meta accounts reached, Unique outbound CTR, Unique CTR (link), Cost per unique
+click (all), Cost per unique outbound click, Cost per landing page view, Hook rate, Hold rate,
+Impressions.
+
+- View by ad account, campaign, ad set or ad. Click a name to drill down (campaign → its ad sets → its ads).
+- Pick one account or all of them, a date preset or a custom range. Click any column to sort.
+- **Results / Cost per result** follow each ad set's optimization goal (pixel event, custom
+  conversion, link clicks, landing page views…), like Ads Manager. A campaign whose ad sets
+  optimize for different things shows "—".
+- **Hook rate** = 3-second video plays ÷ impressions. **Hold rate** = ThruPlays ÷ impressions.
+- **Actions** is the sum of Meta's reported actions, leaving out the aggregate engagement
+  counts that would double up.
+- Totals use Meta's exact account totals. When you drill down or search, they add up the rows
+  shown instead, and reach-based numbers (frequency, unique CTRs) are approximate.
+
+Meta doesn't let outside tools read saved Ads Manager column presets, so the preset is rebuilt
+in `public/app.js` (`PERF_COLS`) and `src/insights.js`.
+
 ## Enhancements off
 
 Meta removed the single "standard enhancements" switch in Marketing API v22, so

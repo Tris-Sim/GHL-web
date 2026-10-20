@@ -920,6 +920,261 @@ function renderResults() {
     : state.dryRun ? 'No ads were created. Turn off "Test run" in Review to publish for real.' : `Ads were created ${state.status === 'ACTIVE' ? 'live' : 'paused'}. Find them in Ads Manager.`;
 }
 
+// ---------- Performance ("Tristen performance" columns) ----------
+const perf = {
+  level: store.get('perfLevel', 'adset'),
+  account: store.get('perfAccount', 'all'),
+  date: store.get('perfDate', 'last_7d'),
+  sort: store.get('perfSort', { key: 'spend', dir: -1 }),
+  filter: null, // drill-down: { kind: 'account'|'campaign'|'adset', id, name }
+  cache: new Map(),
+  token: 0,
+};
+const ZERO_DEC = new Set(['JPY', 'KRW', 'VND', 'CLP', 'ISK', 'HUF', 'TWD', 'COP', 'IDR', 'PYG']);
+const LEVEL_NAMES = { account: 'Ad account', campaign: 'Campaign', adset: 'Ad set', ad: 'Ad' };
+
+const fmtMoney = (v, cur) => (v === null || v === undefined || Number.isNaN(v) ? '—'
+  : new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD', maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(v));
+const fmtInt = (v) => (v === null || v === undefined ? '—' : new Intl.NumberFormat('en-US').format(Math.round(v)));
+const fmtPct = (v) => (v === null || v === undefined ? '—' : `${v.toFixed(2)}%`);
+const fmtDec = (v) => (v === null || v === undefined ? '—' : v.toFixed(2));
+
+const DELIVERY = {
+  ACTIVE: ['Active', 'on'], PAUSED: ['Off', ''], CAMPAIGN_PAUSED: ['Campaign off', ''], ADSET_PAUSED: ['Ad set off', ''],
+  IN_PROCESS: ['Processing', 'warn'], WITH_ISSUES: ['Issues', 'bad'], PENDING_REVIEW: ['In review', 'warn'],
+  DISAPPROVED: ['Rejected', 'bad'], PREAPPROVED: ['Approved', 'warn'], PENDING_BILLING_INFO: ['Billing issue', 'bad'],
+};
+const deliveryCell = (s) => {
+  if (!s) return '<span class="muted">—</span>';
+  const [label, cls] = DELIVERY[s] || [s.replace(/_/g, ' ').toLowerCase(), ''];
+  return `<span class="dlv ${cls}">${esc(label)}</span>`;
+};
+const budgetCell = (b, cur) => {
+  if (!b) return '<span class="muted">—</span>';
+  const amt = b.amount / (ZERO_DEC.has(cur) ? 1 : 100);
+  return `${fmtMoney(amt, cur)}<span class="sublbl">${b.campaign ? 'Campaign budget' : b.period === 'daily' ? 'Daily' : 'Lifetime'}</span>`;
+};
+
+// Columns in the same order as the Ads Manager preset.
+const PERF_COLS = [
+  { key: 'delivery', label: 'Delivery', text: true, sort: (r) => r.delivery || '', cell: (r) => deliveryCell(r.delivery) },
+  { key: 'spend', label: 'Amount spent', money: true },
+  { key: 'budget', label: 'Budget', sort: (r) => r.budget?.amount || 0, cell: (r) => budgetCell(r.budget, r.currency) },
+  { key: 'actions', label: 'Actions', int: true },
+  { key: 'cpm', label: 'CPM (cost per 1,000 impressions)', money: true },
+  { key: 'frequency', label: 'Frequency', dec: true },
+  { key: 'linkClicks', label: 'Link clicks', int: true },
+  { key: 'costPerResult', label: 'Cost per result', money: true, sub: (r) => r.resultLabel && r.metrics.costPerResult !== null ? `Per ${r.resultLabel.replace(/s$/, '').toLowerCase()}` : '' },
+  { key: 'results', label: 'Results', int: true, sub: (r) => r.resultLabel || '' },
+  { key: 'costPer1kReached', label: 'Cost per 1,000 Meta accounts reached', money: true },
+  { key: 'uniqueOutboundCtr', label: 'Unique outbound CTR', pct: true },
+  { key: 'uniqueLinkCtr', label: 'Unique CTR (link)', pct: true },
+  { key: 'costPerUniqueClick', label: 'Cost per unique click (all)', money: true },
+  { key: 'costPerUniqueOutbound', label: 'Cost per unique outbound click', money: true },
+  { key: 'costPerLpv', label: 'Cost per landing page view', money: true },
+  { key: 'hookRate', label: 'Hook rate', pct: true },
+  { key: 'holdRate', label: 'Hold rate', pct: true },
+  { key: 'impressions', label: 'Impressions', int: true },
+];
+
+function metricCell(col, r) {
+  if (col.cell) return col.cell(r);
+  const v = r.metrics[col.key];
+  const out = col.money ? fmtMoney(v, r.currency) : col.int ? fmtInt(v) : col.pct ? fmtPct(v) : fmtDec(v);
+  const sub = col.sub ? col.sub(r) : '';
+  return `${out}${sub ? `<span class="sublbl">${esc(sub)}</span>` : ''}`;
+}
+
+function perfRange() {
+  if (perf.date === 'custom') {
+    const since = $('#perf-since').value;
+    const until = $('#perf-until').value;
+    return since && until ? `since=${since}&until=${until}` : null;
+  }
+  return `date_preset=${perf.date}`;
+}
+
+function perfAccounts() {
+  if (perf.filter?.kind === 'account') return state.accounts.filter((a) => a.id === perf.filter.id);
+  return perf.account === 'all' ? state.accounts : state.accounts.filter((a) => a.id === perf.account);
+}
+
+async function loadPerformance(force = false) {
+  const range = perfRange();
+  const status = $('#perf-status');
+  if (!range) { status.textContent = 'Pick both dates for a custom range.'; return; }
+  const accounts = perfAccounts();
+  const token = ++perf.token;
+  const todo = accounts.filter((a) => force || !perf.cache.has(`${a.id}|${perf.level}|${range}`));
+  let done = accounts.length - todo.length;
+  const errors = [];
+  status.className = 'perf-status';
+  if (todo.length) status.textContent = `Loading ${done}/${accounts.length} accounts…`;
+  renderPerformance();
+  const queue = [...todo];
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (queue.length) {
+      const a = queue.shift();
+      try {
+        perf.cache.set(`${a.id}|${perf.level}|${range}`, await api(`/api/accounts/${a.id}/performance?level=${perf.level}&${range}`));
+      } catch (e) { errors.push(`${a.name}: ${e.message}`); }
+      done++;
+      if (token !== perf.token) return;
+      status.textContent = `Loading ${done}/${accounts.length} accounts…`;
+      renderPerformance();
+    }
+  }));
+  if (token !== perf.token) return;
+  status.className = `perf-status${errors.length ? ' bad' : ''}`;
+  status.textContent = errors.length ? errors.join(' · ') : '';
+  renderPerformance();
+}
+
+// Totals across accounts: additive numbers sum; rates are recomputed. Unique
+// CTRs can't be summed, so they're reach-weighted (approximate) when several
+// accounts are combined.
+function combineTotals(list) {
+  if (!list.length) return null;
+  if (list.length === 1) return { ...list[0].total, currency: list[0].currency };
+  const currencies = new Set(list.map((d) => d.currency));
+  const raw = {};
+  const keys = ['spend', 'impressions', 'reach', 'linkClicks', 'uniqueClicks', 'uniqueOutbound', 'landingPageViews', 'videoViews3s', 'thruplays', 'actions'];
+  for (const k of keys) raw[k] = list.reduce((s, d) => s + (d.total?.raw?.[k] || 0), 0);
+  const labels = new Set(list.map((d) => d.total?.resultLabel).filter(Boolean));
+  raw.results = labels.size === 1 && list.every((d) => d.total?.raw?.results !== null) ? list.reduce((s, d) => s + (d.total?.raw?.results || 0), 0) : null;
+  const weighted = (k) => (raw.reach ? list.reduce((s, d) => s + (d.total?.raw?.[k] || 0) * (d.total?.raw?.reach || 0), 0) / raw.reach : null);
+  const m = {
+    spend: raw.spend, actions: raw.actions, impressions: raw.impressions, reach: raw.reach, linkClicks: raw.linkClicks, results: raw.results,
+    cpm: raw.impressions ? (raw.spend * 1000) / raw.impressions : null,
+    frequency: raw.reach ? raw.impressions / raw.reach : null,
+    costPerResult: raw.results ? raw.spend / raw.results : null,
+    costPer1kReached: raw.reach ? (raw.spend * 1000) / raw.reach : null,
+    uniqueOutboundCtr: weighted('uniqueOutboundCtr'),
+    uniqueLinkCtr: weighted('uniqueLinkCtr'),
+    costPerUniqueClick: raw.uniqueClicks ? raw.spend / raw.uniqueClicks : null,
+    costPerUniqueOutbound: raw.uniqueOutbound ? raw.spend / raw.uniqueOutbound : null,
+    costPerLpv: raw.landingPageViews ? raw.spend / raw.landingPageViews : null,
+    hookRate: raw.videoViews3s ? (raw.videoViews3s * 100) / raw.impressions : null,
+    holdRate: raw.videoViews3s ? (raw.thruplays * 100) / raw.impressions : null,
+  };
+  if (currencies.size > 1) for (const c of PERF_COLS) if (c.money) m[c.key] = null;
+  return { metrics: m, resultLabel: labels.size === 1 ? [...labels][0] : null, currency: [...currencies][0], approx: true };
+}
+
+function renderPerformance() {
+  $$('#perf-level button').forEach((b) => b.classList.toggle('active', b.dataset.level === perf.level));
+  $('#perf-custom').hidden = perf.date !== 'custom';
+  $('#perf-range-label').textContent = `· ${$('#perf-date').selectedOptions[0]?.textContent || ''}`;
+  const chip = $('#perf-filter');
+  chip.innerHTML = perf.filter ? `<span class="filter-chip">${esc(LEVEL_NAMES[perf.filter.kind])}: ${esc(perf.filter.name)} <button type="button" title="Clear">×</button></span>` : '';
+  $('button', chip)?.addEventListener('click', () => { perf.filter = null; loadPerformance(); });
+
+  const range = perfRange();
+  const accounts = perfAccounts();
+  const loaded = accounts.map((a) => perf.cache.get(`${a.id}|${perf.level}|${range}`)).filter(Boolean);
+  const multi = accounts.length > 1;
+  const q = $('#perf-search').value.trim().toLowerCase();
+  const onlySpend = $('#perf-spend').checked;
+
+  let rows = loaded.flatMap((d) => d.rows.map((r) => ({
+    ...r,
+    currency: d.currency,
+    accountName: d.accountName,
+    parent: perf.level === 'account' ? null : [multi ? d.accountName : null, r.parent].filter(Boolean).join(' · '),
+  })));
+  if (perf.filter?.kind === 'campaign') rows = rows.filter((r) => r.campaignId === perf.filter.id);
+  if (perf.filter?.kind === 'adset') rows = rows.filter((r) => r.adsetId === perf.filter.id);
+  if (onlySpend) rows = rows.filter((r) => r.metrics.spend > 0);
+  if (q) rows = rows.filter((r) => [r.name, r.parent].some((t) => String(t || '').toLowerCase().includes(q)));
+
+  const col = PERF_COLS.find((c) => c.key === perf.sort.key);
+  const val = (r) => (perf.sort.key === 'name' ? r.name : col?.sort ? col.sort(r) : r.metrics[perf.sort.key]);
+  rows.sort((a, b) => {
+    const x = val(a); const y = val(b);
+    if (x === null || x === undefined) return 1;
+    if (y === null || y === undefined) return -1;
+    return perf.sort.dir * (typeof x === 'string' ? byText(x, y) : x - y);
+  });
+
+  const arrow = (k) => (perf.sort.key === k ? (perf.sort.dir > 0 ? ' ↑' : ' ↓') : '');
+  const drill = { account: 'campaign', campaign: 'adset', adset: 'ad' }[perf.level];
+  const table = $('#perf-table');
+  table.innerHTML = `<thead><tr>
+      <th class="c-name ${perf.sort.key === 'name' ? 'sorted' : ''}" data-k="name">${LEVEL_NAMES[perf.level]}${arrow('name')}</th>
+      ${PERF_COLS.map((c) => `<th class="${c.text ? 'c-text' : ''} ${perf.sort.key === c.key ? 'sorted' : ''}" data-k="${c.key}">${esc(c.label)}${arrow(c.key)}</th>`).join('')}
+    </tr></thead>
+    <tbody>${rows.map((r, i) => `<tr class="${r.noDelivery ? 'nodeliv' : ''}">
+      <td class="c-name"><span class="nm ${drill ? 'link' : ''}" data-i="${i}" ${drill ? `title="Show its ${LEVEL_NAMES[drill].toLowerCase()}s"` : ''}>${esc(r.name)}</span>${r.parent ? `<span class="pr">${esc(r.parent)}</span>` : ''}</td>
+      ${PERF_COLS.map((c) => `<td class="${c.text ? 'c-text' : ''}">${metricCell(c, r)}</td>`).join('')}
+    </tr>`).join('')}</tbody>`;
+
+  // Exact account totals unless the view is narrowed; then add up the rows shown.
+  const narrowed = Boolean(perf.filter && perf.filter.kind !== 'account') || Boolean(q);
+  const total = narrowed
+    ? combineTotals(rows.map((r) => ({ total: { raw: r.raw, metrics: r.metrics, resultLabel: r.resultLabel }, currency: r.currency })))
+    : combineTotals(loaded);
+  const totalNote = narrowed ? 'Sum of rows shown · reach-based numbers approximate'
+    : total?.approx ? 'All accounts in range · unique CTRs approximate' : `All ${LEVEL_NAMES[perf.level].toLowerCase()}s in range`;
+  if (total && rows.length) {
+    const t = { ...total, delivery: null, budget: null };
+    table.insertAdjacentHTML('beforeend', `<tfoot><tr><td class="c-name">Total<span class="sublbl">${totalNote}</span></td>
+      ${PERF_COLS.map((c) => `<td class="${c.text ? 'c-text' : ''}">${c.key === 'delivery' || c.key === 'budget' ? '' : metricCell(c, t)}</td>`).join('')}</tr></tfoot>`);
+  }
+  if (!rows.length) {
+    table.insertAdjacentHTML('beforeend', `<tbody><tr><td class="c-name" colspan="${PERF_COLS.length + 1}" style="text-align:left;color:var(--muted)">${loaded.length < accounts.length ? 'Loading…' : onlySpend ? 'Nothing spent in this date range. Untick "Only rows with spend" to see everything.' : 'Nothing to show.'}</td></tr></tbody>`);
+  }
+
+  $$('thead th', table).forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    perf.sort = { key: k, dir: perf.sort.key === k ? -perf.sort.dir : (k === 'name' || k === 'delivery' ? 1 : -1) };
+    store.set('perfSort', perf.sort);
+    renderPerformance();
+  }));
+  if (drill) {
+    $$('.nm.link', table).forEach((el) => el.addEventListener('click', () => {
+      const r = rows[Number(el.dataset.i)];
+      perf.filter = { kind: perf.level, id: perf.level === 'account' ? r.id.startsWith('act_') ? r.id : `act_${r.id}` : r.id, name: r.name };
+      perf.level = drill;
+      store.set('perfLevel', perf.level);
+      loadPerformance();
+    }));
+  }
+}
+
+function showApp(which) {
+  $$('.app-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.app === which));
+  const isPerf = which === 'performance';
+  $('#perf-view').hidden = !isPerf;
+  $('#publish-view').hidden = isPerf;
+  $('#publish-stepper').hidden = isPerf;
+  $('#publish-bar').hidden = isPerf;
+  document.body.classList.toggle('perf-mode', isPerf);
+  store.set('app', which);
+  if (isPerf && state.accounts.length) loadPerformance();
+}
+
+function initPerformance() {
+  $('#perf-account').innerHTML = `<option value="all">All ad accounts (${state.accounts.length})</option>`
+    + sortRows([...state.accounts], (a) => a.name).map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  if (perf.account !== 'all' && !state.accounts.some((a) => a.id === perf.account)) perf.account = 'all';
+  $('#perf-account').value = perf.account;
+  $('#perf-date').value = perf.date;
+}
+
+$$('.app-tabs button').forEach((b) => b.addEventListener('click', () => showApp(b.dataset.app)));
+$$('#perf-level button').forEach((b) => b.addEventListener('click', () => {
+  perf.level = b.dataset.level;
+  perf.filter = null;
+  store.set('perfLevel', perf.level);
+  loadPerformance();
+}));
+$('#perf-account').addEventListener('change', (e) => { perf.account = e.target.value; perf.filter = null; store.set('perfAccount', perf.account); loadPerformance(); });
+$('#perf-date').addEventListener('change', (e) => { perf.date = e.target.value; store.set('perfDate', perf.date); loadPerformance(); });
+['#perf-since', '#perf-until'].forEach((s) => $(s).addEventListener('change', () => loadPerformance()));
+$('#perf-search').addEventListener('input', renderPerformance);
+$('#perf-spend').addEventListener('change', renderPerformance);
+$('#perf-refresh').addEventListener('click', () => loadPerformance(true));
+
 // ---------- Boot ----------
 async function init() {
   state.config = await api('/api/config');
@@ -945,6 +1200,7 @@ async function init() {
     state.pages = pages;
     pill.textContent = `Connected · ${plural(accounts.length, 'ad account')}`;
     pill.className = 'pill ok';
+    initPerformance();
   } catch (e) {
     pill.textContent = 'Connection failed';
     pill.className = 'pill bad';
@@ -953,6 +1209,7 @@ async function init() {
     return;
   }
   renderTargets();
+  if (store.get('app', 'publish') === 'performance') showApp('performance');
 }
 
 $('#add-draft').addEventListener('click', () => { state.drafts.push(newDraft()); state.openDraft = state.drafts.length - 1; saveDrafts(); renderDrafts(); });

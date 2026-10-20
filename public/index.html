@@ -16,10 +16,14 @@
       <img src="logo.png" alt="Sim &amp; Co" class="logo">
       <span class="product">Ad Publisher</span>
     </div>
+    <nav class="app-tabs" aria-label="Sections">
+      <button type="button" data-app="publish" class="active">Publish ads</button>
+      <button type="button" data-app="performance">Performance</button>
+    </nav>
     <div id="token-status" class="pill">Checking…</div>
   </header>
 
-  <nav class="stepper" aria-label="Steps">
+  <nav class="stepper" id="publish-stepper" aria-label="Steps">
     <ol>
       <li data-step="1"><button type="button"><span class="num">1</span><span class="label">Destinations</span></button></li>
       <li data-step="2"><button type="button"><span class="num">2</span><span class="label">Ads</span></button></li>
@@ -28,7 +32,7 @@
     </ol>
   </nav>
 
-  <main>
+  <main id="publish-view">
     <!-- Step 1 -->
     <section class="step" data-step="1">
       <div class="step-head">
@@ -150,7 +154,57 @@
     </section>
   </main>
 
-  <footer class="actionbar">
+  <main id="perf-view" class="perf" hidden>
+    <div class="step-head">
+      <div>
+        <h2>Performance</h2>
+        <p class="sub"><span class="preset-tag">Tristen performance</span> <span id="perf-range-label"></span></p>
+      </div>
+      <button type="button" id="perf-refresh" class="ghost">↻ Refresh</button>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <div class="seg" id="perf-level">
+          <button type="button" data-level="account">Ad accounts</button>
+          <button type="button" data-level="campaign">Campaigns</button>
+          <button type="button" data-level="adset">Ad sets</button>
+          <button type="button" data-level="ad">Ads</button>
+        </div>
+        <div class="toolbar-right">
+          <select id="perf-account" class="compact"></select>
+          <select id="perf-date" class="compact">
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="last_7d">Last 7 days</option>
+            <option value="last_14d">Last 14 days</option>
+            <option value="last_30d">Last 30 days</option>
+            <option value="this_month">This month</option>
+            <option value="last_month">Last month</option>
+            <option value="maximum">Maximum</option>
+            <option value="custom">Custom range…</option>
+          </select>
+          <span id="perf-custom" class="date-range" hidden>
+            <input type="date" id="perf-since"> – <input type="date" id="perf-until">
+          </span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="filters">
+          <div class="search">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.83l3.65 3.64-1.06 1.06-3.64-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
+            <input id="perf-search" type="search" placeholder="Search names">
+          </div>
+          <span id="perf-filter"></span>
+        </div>
+        <label class="inline check"><input type="checkbox" id="perf-spend" checked> Only rows with spend</label>
+      </div>
+      <div id="perf-status" class="perf-status"></div>
+      <div class="table-wrap"><table id="perf-table" class="perf-table"></table></div>
+      <p class="sub tight perf-foot">Hook rate = 3-second video plays ÷ impressions. Hold rate = ThruPlays ÷ impressions. Results follow each ad set's optimization goal, like Ads Manager. Totals are exact for the whole account, or add up the rows shown when you drill down or search.</p>
+    </div>
+  </main>
+
+  <footer class="actionbar" id="publish-bar">
     <div class="actionbar-inner">
       <span id="summary" class="summary"></span>
       <span id="next-hint" class="hint"></span>

@@ -9,6 +9,7 @@ const { createClient, API_VERSION } = require('./meta');
 const { CTA_TYPES, validateDraft, publish } = require('./publisher');
 const { CREATIVE_FEATURES } = require('./enhancements');
 const { GOALS, CONVERSION_EVENTS, validateNewAdset, createAdset, copyAdset } = require('./adsets');
+const { INSIGHT_FIELDS, LEVELS, DATE_PRESETS, buildRows } = require('./insights');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -107,6 +108,29 @@ app.post('/api/accounts/:id/adsets', express.json(), wrap(async (req, res) => {
   }
   const adset = await c.get(id, { fields: 'id,name,status,effective_status,campaign{id,name,objective}' });
   res.json(adset);
+}));
+
+// Performance table ("Tristen performance" columns) for one account.
+// ?level=account|campaign|adset|ad&date_preset=last_7d  or  &since=YYYY-MM-DD&until=YYYY-MM-DD
+const OBJECT_STATUSES = ['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO'];
+app.get('/api/accounts/:id/performance', wrap(async (req, res) => {
+  const c = client();
+  const id = actId(req.params.id);
+  const level = LEVELS[req.query.level] ? req.query.level : 'adset';
+  const range = req.query.since && req.query.until
+    ? { time_range: { since: String(req.query.since), until: String(req.query.until) } }
+    : { date_preset: DATE_PRESETS.includes(req.query.date_preset) ? req.query.date_preset : 'last_7d' };
+  const live = (statuses) => [{ field: 'effective_status', operator: 'IN', value: statuses }];
+  const [account, insights, totals, campaigns, adsets, ads] = await Promise.all([
+    c.get(id, { fields: 'currency,name' }),
+    c.getAll(`${id}/insights`, { level, fields: INSIGHT_FIELDS, ...range }, 5000),
+    c.get(`${id}/insights`, { level: 'account', fields: INSIGHT_FIELDS, ...range }),
+    level === 'account' ? [] : c.getAll(`${id}/campaigns`, { fields: 'id,name,effective_status,daily_budget,lifetime_budget', filtering: live(OBJECT_STATUSES) }),
+    level === 'account' ? [] : c.getAll(`${id}/adsets`, { fields: 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget,optimization_goal,promoted_object', filtering: live(OBJECT_STATUSES) }),
+    level === 'ad' ? c.getAll(`${id}/ads`, { fields: 'id,name,adset_id,effective_status', filtering: live(OBJECT_STATUSES) }, 5000) : [],
+  ]);
+  const { rows, total } = buildRows(level, insights, { campaigns, adsets, ads }, (totals.data || [])[0] || {});
+  res.json({ accountId: id, accountName: account.name, currency: account.currency, level, rows, total });
 }));
 
 app.get('/api/pages', wrap(async (req, res) => {
