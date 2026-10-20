@@ -58,7 +58,7 @@ app.get('/api/accounts/:id/adsets', wrap(async (req, res) => {
 }));
 
 app.get('/api/pages', wrap(async (req, res) => {
-  const pages = await client().getAll('me/accounts', { fields: 'id,name,instagram_business_account{id,username}' });
+  const pages = await client().getAll('me/accounts', { fields: 'id,name,picture{url},instagram_business_account{id,username}' });
   res.json(pages);
 }));
 

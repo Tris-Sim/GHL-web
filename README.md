@@ -46,21 +46,22 @@ If the dashboard says the token is missing, the server prints why when it starts
 
 ## How it works
 
-1. **Where to publish**: lists every active ad account the token can see, in one of
-   three views:
-   - **By ad account**: account → campaign → ad set, with select-all at each level.
-   - **By campaign**: every campaign across all accounts, expand to tick ad sets.
-   - **By ad set**: one table of every ad set. Click a column (Ad set, Campaign,
-     Ad account, Status) to sort.
+The dashboard walks through four steps, with Back / Continue in the bar at the bottom:
 
-   Use the filter box and the A → Z / Z → A button to narrow and order the list.
-   Pick the Facebook Page (and linked Instagram) per account in the account or campaign view. Campaigns and ad sets (budget, audience, placements) are set up
-   in Ads Manager. This tool only creates the ads.
-2. **Ads**: add as many ad variations as you want. Text you type is saved
-   in your browser between sessions. Media files are not saved.
-3. **Publish**: ads are created **paused** by default. Tick *Dry run* to see the
-   exact payload without creating anything. Results can be grouped by ad account,
-   campaign, ad set or ad.
+1. **Destinations**: tick the ad sets the ads go into. View them by ad account
+   (account → campaign → ad set), by campaign, or as one sortable ad set table,
+   and use the search box to narrow the list. Under **Post as**, pick the Facebook
+   Page (and linked Instagram) each account publishes from. Campaigns and ad sets
+   (budget, audience, placements) are set up in Ads Manager. This tool only creates the ads.
+2. **Ads**: each ad is a card you open and close. Add media, primary text, headline,
+   description, button and website. Ad name, display link and URL parameters are under
+   *More options*. Counters warn when copy will be cut off in feed. Text is saved in
+   your browser between sessions; media files are not.
+3. **Review**: a Facebook and Instagram preview of every ad, every field listed out,
+   checks (copy length, tracking parameters, missing Instagram), where each ad goes,
+   and the publish settings: **Paused** (default) or **Live**, and **Test run**, which
+   checks everything without creating ads.
+4. **Publish**: live progress, then results grouped by ad account, campaign, ad set or ad.
 
 For each target account it uploads the media once, creates the creative, then creates the ad.
 

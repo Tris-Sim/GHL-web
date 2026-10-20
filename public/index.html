@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
+  <header class="topbar">
     <div class="brand">
       <img src="logo.png" alt="Sim &amp; Co" class="logo">
       <span class="product">Ad Publisher</span>
@@ -19,51 +19,120 @@
     <div id="token-status" class="pill">Checking…</div>
   </header>
 
+  <nav class="stepper" aria-label="Steps">
+    <ol>
+      <li data-step="1"><button type="button"><span class="num">1</span><span class="label">Destinations</span></button></li>
+      <li data-step="2"><button type="button"><span class="num">2</span><span class="label">Ads</span></button></li>
+      <li data-step="3"><button type="button"><span class="num">3</span><span class="label">Review</span></button></li>
+      <li data-step="4"><button type="button"><span class="num">4</span><span class="label">Publish</span></button></li>
+    </ol>
+  </nav>
+
   <main>
-    <section class="panel">
-      <div class="panel-head">
-        <h2>1. Where to publish</h2>
-        <input id="account-search" type="search" placeholder="Filter accounts / ad sets">
-      </div>
-      <p class="hint">Pick the ad sets the ads go into. Each account needs a Facebook Page (and an Instagram account if you want IG placements).</p>
-      <div class="toolbar">
-        <div id="view-tabs" class="tabs" role="tablist" aria-label="View by">
-          <button type="button" data-view="account">By ad account</button>
-          <button type="button" data-view="campaign">By campaign</button>
-          <button type="button" data-view="adset">By ad set</button>
+    <!-- Step 1 -->
+    <section class="step" data-step="1">
+      <div class="step-head">
+        <div>
+          <h2>Where should the ads go?</h2>
+          <p class="sub">Pick the ad sets. Every ad you create goes into every ad set you tick.</p>
         </div>
-        <button type="button" id="sort-dir" title="Sort direction">A → Z</button>
       </div>
-      <div id="accounts"><p class="muted">Loading ad accounts…</p></div>
+
+      <div class="card">
+        <div class="toolbar">
+          <div id="view-tabs" class="seg" role="tablist" aria-label="View by">
+            <button type="button" data-view="account">Ad accounts</button>
+            <button type="button" data-view="campaign">Campaigns</button>
+            <button type="button" data-view="adset">Ad sets</button>
+          </div>
+          <div class="toolbar-right">
+            <div class="search">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.83l3.65 3.64-1.06 1.06-3.64-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
+              <input id="account-search" type="search" placeholder="Search">
+            </div>
+            <button type="button" id="sort-dir" class="ghost small" title="Sort direction">A → Z</button>
+          </div>
+        </div>
+        <div id="accounts" class="list"><p class="empty">Loading ad accounts…</p></div>
+      </div>
+
+      <div class="card" id="pages-card" hidden>
+        <h3>Post as</h3>
+        <p class="sub">The Facebook Page (and Instagram account) each ad account publishes from.</p>
+        <div id="pages-list" class="rows"></div>
+      </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h2>2. Ads</h2>
-        <button id="add-draft" type="button">+ Add ad</button>
+    <!-- Step 2 -->
+    <section class="step" data-step="2" hidden>
+      <div class="step-head">
+        <div>
+          <h2>Create your ads</h2>
+          <p class="sub">Add one or more ads. Click an ad to open or close it.</p>
+        </div>
+        <button id="add-draft" type="button" class="dark">+ Add ad</button>
       </div>
-      <p class="hint">Every ad below goes into every ad set you selected.</p>
       <div id="drafts"></div>
     </section>
 
-    <section class="panel">
-      <h2>3. Publish</h2>
-      <div class="publish-row">
-        <label><input type="radio" name="status" value="PAUSED" checked> Create paused</label>
-        <label><input type="radio" name="status" value="ACTIVE"> Go live now</label>
-        <label class="dry"><input type="checkbox" id="dry-run"> Dry run (show what would be sent, create nothing)</label>
+    <!-- Step 3 -->
+    <section class="step" data-step="3" hidden>
+      <div class="step-head">
+        <div>
+          <h2>Review before publishing</h2>
+          <p class="sub">This is how your ads will look and where they'll go. Nothing has been created yet.</p>
+        </div>
       </div>
-      <details class="enh">
-        <summary>All Facebook enhancements off — <span id="enh-count"></span> Advantage+ creative features opted out on every ad</summary>
-        <p class="hint">Also opted out of multi-advertiser ads. After each ad is created, the creative is read back from Meta and anything still switched on is flagged in the results.</p>
-        <ul id="enh-list"></ul>
-      </details>
-      <p id="summary" class="summary"></p>
-      <button id="publish" type="button" class="primary">Publish</button>
-      <div id="errors" class="errors" hidden></div>
-      <div id="results" hidden>
+
+      <div id="review-stats" class="stats"></div>
+
+      <div class="review-grid">
+        <div id="review-ads"></div>
+        <aside class="review-side">
+          <div class="card">
+            <h3>Publish settings</h3>
+            <div class="setting">
+              <span class="setting-label">Status</span>
+              <div class="seg" id="status-seg">
+                <button type="button" data-status="PAUSED" class="active">Paused</button>
+                <button type="button" data-status="ACTIVE">Live</button>
+              </div>
+            </div>
+            <p class="sub tight" id="status-note">Ads are created paused. Turn them on in Ads Manager when you're ready.</p>
+            <label class="switch-row">
+              <span>
+                <span class="setting-label">Test run</span>
+                <span class="sub tight">Check everything with Meta's data without creating ads.</span>
+              </span>
+              <input type="checkbox" id="dry-run" class="switch">
+            </label>
+            <details class="enh">
+              <summary><span class="check">✓</span> All Facebook enhancements off <span class="muted" id="enh-count"></span></summary>
+              <p class="sub tight">Every Advantage+ creative feature and multi-advertiser ads are opted out. Each ad is checked with Meta after it's created.</p>
+              <ul id="enh-list"></ul>
+            </details>
+          </div>
+          <div class="card">
+            <h3>Destinations</h3>
+            <div id="review-targets"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Step 4 -->
+    <section class="step" data-step="4" hidden>
+      <div class="step-head">
+        <div>
+          <h2 id="results-title">Publishing…</h2>
+          <p class="sub" id="results-sub"></p>
+        </div>
+        <button type="button" id="new-batch" class="ghost" hidden>Start a new batch</button>
+      </div>
+      <div class="card">
+        <div class="progress"><div id="progress-bar"></div></div>
         <div class="toolbar">
-          <label class="inline">Group results by
+          <label class="inline">Group by
             <select id="group-by">
               <option value="account">Ad account</option>
               <option value="campaign">Campaign</option>
@@ -73,43 +142,93 @@
           </label>
           <span id="result-counts" class="muted"></span>
         </div>
-        <table>
-          <thead><tr><th>Ad</th><th>Ad account / Campaign / Ad set</th><th>Result</th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <details><summary>Log</summary><pre id="log"></pre></details>
+        <div id="errors" class="alert" hidden></div>
+        <div id="results-list"></div>
+        <details class="log"><summary>Activity log</summary><pre id="log"></pre></details>
       </div>
     </section>
   </main>
 
+  <footer class="actionbar">
+    <div class="actionbar-inner">
+      <span id="summary" class="summary"></span>
+      <span id="next-hint" class="hint"></span>
+      <div class="actions">
+        <button type="button" id="back" class="ghost">Back</button>
+        <button type="button" id="next" class="primary">Continue</button>
+      </div>
+    </div>
+  </footer>
+
   <template id="draft-tpl">
     <div class="draft">
-      <div class="draft-head">
-        <strong class="draft-num"></strong>
-        <div>
-          <button type="button" class="dup">Duplicate</button>
-          <button type="button" class="remove">Remove</button>
+      <div class="draft-head" role="button" tabindex="0">
+        <div class="thumb"></div>
+        <div class="draft-title">
+          <strong></strong>
+          <span class="draft-meta"></span>
+        </div>
+        <div class="draft-actions">
+          <button type="button" class="icon dup" title="Duplicate">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 1.5a.5.5 0 0 0-.5.5v9c0 .28.22.5.5.5h9a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H7ZM3.5 6v10c0 .28.22.5.5.5h10V18H4a2 2 0 0 1-2-2V6h1.5Z"/></svg>
+          </button>
+          <button type="button" class="icon remove" title="Remove">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 2h4a1 1 0 0 1 1 1v1h4v1.5h-1.1l-.8 11A2 2 0 0 1 13.1 18H6.9a2 2 0 0 1-2-1.5l-.8-11H3V4h4V3a1 1 0 0 1 1-1Zm-2.4 3.5.8 10.9c0 .26.23.46.5.46h6.2c.27 0 .5-.2.5-.46l.8-10.9H5.6ZM8.5 3.5V4h3v-.5h-3Z"/></svg>
+          </button>
+          <span class="chev" aria-hidden="true">▾</span>
         </div>
       </div>
       <div class="draft-body">
-        <div class="media">
-          <label class="drop">
-            <input type="file" accept="image/*,video/*" data-f="media">
-            <span>Choose image or video</span>
-          </label>
-          <div class="preview"></div>
-        </div>
-        <div class="fields">
-          <label>Ad name <input data-f="name" placeholder="Defaults to the headline"></label>
-          <label>Primary text <textarea data-f="primaryText" rows="5" maxlength="2200" placeholder="The main copy above the image/video"></textarea></label>
-          <label>Headline <input data-f="headline" maxlength="255" placeholder="Bold text under the media"></label>
-          <label>Description <input data-f="description" maxlength="255" placeholder="Small text under the headline (optional)"></label>
-          <div class="two">
-            <label>Call to action <select data-f="cta"></select></label>
-            <label>Website (destination link) <input data-f="link" type="url" list="websites" placeholder="https://yoursite.com/landing-page"></label>
+        <label class="drop">
+          <input type="file" accept="image/*,video/*" data-f="media">
+          <div class="drop-preview"></div>
+          <div class="drop-empty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 7.5 8.5l1.06 1.06 2.69-2.69V16h1.5V6.87l2.69 2.69L16.5 8.5 12 4ZM5 15h1.5v3.5h11V15H19v5H5v-5Z"/></svg>
+            <strong>Upload image or video</strong>
+            <span>JPG, PNG, MP4 or MOV</span>
           </div>
-          <label>Display link <input data-f="displayLink" placeholder="yoursite.com (optional, the website text shown on the ad)"></label>
-          <label>URL parameters <input data-f="urlTags" placeholder="utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}"></label>
+          <span class="drop-change">Replace</span>
+        </label>
+        <div class="fields">
+          <label class="field">
+            <span class="field-label">Primary text <span class="count" data-count="primaryText"></span></span>
+            <textarea data-f="primaryText" rows="4" maxlength="2200" placeholder="The main copy that appears above the image or video"></textarea>
+          </label>
+          <label class="field">
+            <span class="field-label">Headline <span class="count" data-count="headline"></span></span>
+            <input data-f="headline" maxlength="255" placeholder="Short and punchy">
+          </label>
+          <label class="field">
+            <span class="field-label">Description <span class="opt">Optional</span></span>
+            <input data-f="description" maxlength="255" placeholder="Supporting line under the headline">
+          </label>
+          <div class="row-2">
+            <label class="field">
+              <span class="field-label">Button</span>
+              <select data-f="cta"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">Website</span>
+              <input data-f="link" type="url" list="websites" placeholder="https://yoursite.com/page">
+            </label>
+          </div>
+          <details class="more">
+            <summary>More options</summary>
+            <div class="more-body">
+              <label class="field">
+                <span class="field-label">Ad name <span class="opt">Defaults to the headline</span></span>
+                <input data-f="name" placeholder="e.g. Roof inspection – UGC v1">
+              </label>
+              <label class="field">
+                <span class="field-label">Display link <span class="opt">Shown on the ad instead of the URL</span></span>
+                <input data-f="displayLink" placeholder="yoursite.com">
+              </label>
+              <label class="field">
+                <span class="field-label">URL parameters <span class="opt">For tracking</span></span>
+                <input data-f="urlTags" placeholder="utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}">
+              </label>
+            </div>
+          </details>
         </div>
       </div>
     </div>
