@@ -1,0 +1,18 @@
+# Render blueprint: New → Blueprint → pick this repo. Fill in the two secret values when asked.
+services:
+  - type: web
+    name: sim-co-ad-publisher
+    runtime: node
+    plan: starter # always on; the free plan sleeps when idle
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: "22"
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false

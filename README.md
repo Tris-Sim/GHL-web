@@ -131,6 +131,19 @@ each feature is opted out one by one in `degrees_of_freedom_spec.creative_featur
 Placement-level Advantage+ settings (Advantage+ placements, audience) live on the
 ad set, so set those in Ads Manager.
 
+## Hosting it online (use it from any device)
+
+Deploy to [Render](https://render.com) (about $7/month for an always-on instance):
+
+1. render.com → sign up with GitHub → **New → Blueprint** → choose this repository and branch.
+2. When asked, set **META_ACCESS_TOKEN** (your token) and **DASHBOARD_PASSWORD** (a strong password).
+3. Deploy. Open the `…onrender.com` URL on any device; the browser asks for a login
+   (any username, your DASHBOARD_PASSWORD).
+
+The server refuses to start on a public address without `DASHBOARD_PASSWORD`, because anyone who can
+open the page can use your Meta token. Uploads are held in memory while publishing, so very large
+videos (several hundred MB) need an instance with more RAM.
+
 ## Development
 
 ```bash

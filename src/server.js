@@ -202,6 +202,12 @@ app.post('/api/publish', upload.any(), async (req, res) => {
 });
 
 if (require.main === module) {
+  // Reachable from other machines (e.g. hosted online)? Then a password is mandatory,
+  // because anyone who can open the page can use your Meta token.
+  if (!['127.0.0.1', 'localhost', '::1'].includes(HOST) && !PASSWORD) {
+    console.error(`Refusing to start on ${HOST} without DASHBOARD_PASSWORD. Set one, or use HOST=127.0.0.1.`);
+    process.exit(1);
+  }
   app.listen(PORT, HOST, () => {
     console.log(`Ad publisher running at http://${HOST}:${PORT} (Graph API ${API_VERSION})`);
     console.log(process.env.META_ACCESS_TOKEN ? 'Meta token loaded.' : `WARNING: ${envProblem}`);
