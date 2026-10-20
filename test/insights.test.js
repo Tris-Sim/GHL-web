@@ -40,7 +40,7 @@ test('ad set row matches the Tristen performance columns', () => {
   assert.ok(Math.abs(m.costPerUniqueOutbound - 0.6667) < 0.001);
   assert.equal(m.costPerLpv, 0.625);
   assert.equal(m.hookRate, 30);
-  assert.equal(m.holdRate, 8);
+  assert.ok(Math.abs(m.holdRate - 26.667) < 0.001); // 800 ThruPlays / 3000 3-second plays
   assert.equal(m.actions, 3370); // post_engagement and omni_ duplicates not counted
   // Paused ad set with no delivery still shows, using the campaign budget
   const s2 = rows.find((x) => x.id === 's2');

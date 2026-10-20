@@ -1055,7 +1055,7 @@ function combineTotals(list) {
     costPerUniqueOutbound: raw.uniqueOutbound ? raw.spend / raw.uniqueOutbound : null,
     costPerLpv: raw.landingPageViews ? raw.spend / raw.landingPageViews : null,
     hookRate: raw.videoViews3s ? (raw.videoViews3s * 100) / raw.impressions : null,
-    holdRate: raw.videoViews3s ? (raw.thruplays * 100) / raw.impressions : null,
+    holdRate: raw.videoViews3s ? (raw.thruplays * 100) / raw.videoViews3s : null,
   };
   if (currencies.size > 1) for (const c of PERF_COLS) if (c.money) m[c.key] = null;
   return { metrics: m, resultLabel: labels.size === 1 ? [...labels][0] : null, currency: [...currencies][0], approx: true };

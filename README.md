@@ -91,7 +91,7 @@ Impressions.
 - **Results / Cost per result** follow each ad set's optimization goal (pixel event, custom
   conversion, link clicks, landing page views…), like Ads Manager. A campaign whose ad sets
   optimize for different things shows "—".
-- **Hook rate** = 3-second video plays ÷ impressions. **Hold rate** = ThruPlays ÷ impressions.
+- **Hook rate** = 3-second video plays ÷ impressions. **Hold rate** = ThruPlays ÷ 3-second video plays.
 - **Actions** is the sum of Meta's reported actions, leaving out the aggregate engagement
   counts that would double up.
 - Totals use Meta's exact account totals. When you drill down or search, they add up the rows

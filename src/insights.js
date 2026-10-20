@@ -120,7 +120,7 @@ function metrics(raw) {
     costPerUniqueOutbound: per(raw.spend, raw.uniqueOutbound),
     costPerLpv: per(raw.spend, raw.landingPageViews),
     hookRate: raw.videoViews3s ? per(raw.videoViews3s * 100, raw.impressions) : null,
-    holdRate: raw.videoViews3s ? per(raw.thruplays * 100, raw.impressions) : null,
+    holdRate: raw.videoViews3s ? per(raw.thruplays * 100, raw.videoViews3s) : null,
     impressions: raw.impressions,
     reach: raw.reach,
   };
